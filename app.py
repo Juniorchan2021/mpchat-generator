@@ -794,11 +794,16 @@ with st.sidebar:
             type="password",
             placeholder="从 pixabay.com/api/docs 获取",
         )
+        def _get_pexels_key():
+            if "PEXELS_API_KEY" in st.secrets:
+                return st.secrets["PEXELS_API_KEY"]
+            return os.getenv("PEXELS_API_KEY", "")
+
         pexels_key = st.text_input(
-            "Pexels API Key（可选，补充图源）",
-            value=os.getenv("PEXELS_API_KEY", ""),
+            "Pexels API Key（补充图源）",
+            value=_get_pexels_key(),
             type="password",
-            placeholder="从 pexels.com/api 获取（可选）",
+            placeholder="从 pexels.com/api 获取",
         )
 
     st.divider()
