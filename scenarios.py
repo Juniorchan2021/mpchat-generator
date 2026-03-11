@@ -1,9 +1,96 @@
 """
-MPChat v3.0 — 场景 / 卖点 / 文风 / 关键词数据模块
+MPChat v4.0 — 场景 / 卖点 / 文风 / 关键词 / 语言 数据模块
 """
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 场景分类 + 32 个细分场景
+# 16 种语言（亚太 + 发展中市场）
+# ══════════════════════════════════════════════════════════════════════════════
+
+LANGUAGES = {
+    "中文 (Chinese)": {
+        "code": "zh",
+        "instruction": "请使用中文（简体）输出所有内容。",
+        "direction": "ltr",
+    },
+    "英文 (English)": {
+        "code": "en",
+        "instruction": "Please output ALL content in English. Do not use Chinese anywhere in the article body.",
+        "direction": "ltr",
+    },
+    "日本語 (Japanese)": {
+        "code": "ja",
+        "instruction": "すべてのコンテンツを日本語で出力してください。記事本文に中国語や英語を使用しないでください。",
+        "direction": "ltr",
+    },
+    "한국어 (Korean)": {
+        "code": "ko",
+        "instruction": "모든 콘텐츠를 한국어로 출력하세요. 기사 본문에 중국어나 영어를 사용하지 마세요.",
+        "direction": "ltr",
+    },
+    "Tiếng Việt (Vietnamese)": {
+        "code": "vi",
+        "instruction": "Vui lòng xuất tất cả nội dung bằng tiếng Việt. Không sử dụng tiếng Trung hoặc tiếng Anh trong bài viết.",
+        "direction": "ltr",
+    },
+    "ภาษาไทย (Thai)": {
+        "code": "th",
+        "instruction": "กรุณาแสดงเนื้อหาทั้งหมดเป็นภาษาไทย อย่าใช้ภาษาจีนหรือภาษาอังกฤษในบทความ",
+        "direction": "ltr",
+    },
+    "Bahasa Indonesia (Indonesian)": {
+        "code": "id",
+        "instruction": "Harap keluarkan semua konten dalam Bahasa Indonesia. Jangan gunakan bahasa Mandarin atau Inggris di badan artikel.",
+        "direction": "ltr",
+    },
+    "Bahasa Melayu (Malay)": {
+        "code": "ms",
+        "instruction": "Sila keluarkan semua kandungan dalam Bahasa Melayu. Jangan gunakan bahasa Mandarin atau Inggeris dalam artikel.",
+        "direction": "ltr",
+    },
+    "Filipino (Filipino)": {
+        "code": "fil",
+        "instruction": "Pakiusap na i-output ang lahat ng content sa Filipino. Huwag gumamit ng Chinese o English sa katawan ng artikulo.",
+        "direction": "ltr",
+    },
+    "हिन्दी (Hindi)": {
+        "code": "hi",
+        "instruction": "कृपया सभी सामग्री हिन्दी में आउटपुट करें। लेख के मुख्य भाग में चीनी या अंग्रेजी का उपयोग न करें।",
+        "direction": "ltr",
+    },
+    "العربية (Arabic)": {
+        "code": "ar",
+        "instruction": "يرجى إخراج جميع المحتوى باللغة العربية. لا تستخدم الصينية أو الإنجليزية في نص المقال.",
+        "direction": "rtl",
+    },
+    "Português (Brazilian Portuguese)": {
+        "code": "pt-BR",
+        "instruction": "Por favor, produza todo o conteúdo em Português Brasileiro. Não use chinês ou inglês no corpo do artigo.",
+        "direction": "ltr",
+    },
+    "Español (Latin American Spanish)": {
+        "code": "es-419",
+        "instruction": "Por favor, genere todo el contenido en Español Latinoamericano. No use chino ni inglés en el cuerpo del artículo.",
+        "direction": "ltr",
+    },
+    "Türkçe (Turkish)": {
+        "code": "tr",
+        "instruction": "Lütfen tüm içeriği Türkçe olarak üretin. Makale gövdesinde Çince veya İngilizce kullanmayın.",
+        "direction": "ltr",
+    },
+    "Kiswahili (Swahili)": {
+        "code": "sw",
+        "instruction": "Tafadhali toa maudhui yote kwa Kiswahili. Usitumie Kichina au Kiingereza katika makala.",
+        "direction": "ltr",
+    },
+    "اردو (Urdu)": {
+        "code": "ur",
+        "instruction": "براہ کرم تمام مواد اردو میں فراہم کریں۔ مضمون میں چینی یا انگریزی استعمال نہ کریں۔",
+        "direction": "rtl",
+    },
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 场景分类 + 37+ 细分场景
 # ══════════════════════════════════════════════════════════════════════════════
 
 SCENARIO_CATEGORIES = {

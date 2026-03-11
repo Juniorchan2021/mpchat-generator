@@ -1,6 +1,6 @@
 """
-MPChat 智能软文生成器 v3.1
-32+ 细分场景 · 25+ 卖点 · 7 种文风 · Pixabay 实图 · SEO 工具箱
+MPChat 智能软文生成器 v4.0
+37+ 细分场景 · 25+ 卖点 · 7 种文风 · 16 种语言 · 多图库 · GEO + SEO 双优化
 流式进度 · 批量生成 · 历史记录 · 文内配图 · A/B 标题 · 竞品对比
 """
 
@@ -26,14 +26,27 @@ from scenarios import (
     SP_ID_TO_LABEL,
     ARTICLE_STYLES,
     KEYWORD_PRESETS,
+    LANGUAGES,
 )
-from pixabay_client import fetch_images_for_article
+from image_client import fetch_images_for_article
 from seo_tools import (
     generate_slug,
     generate_schema,
     generate_internal_links,
     reading_stats,
 )
+from geo_tools import geo_score, generate_faq_schema, build_geo_optimize_prompt
+from publishers import (
+    publish_to_devto,
+    publish_to_hashnode,
+    format_for_medium,
+    format_for_linkedin,
+    format_for_twitter_thread,
+    format_for_zhihu,
+    format_for_wechat,
+    format_for_crypto_submission,
+)
+from serp_analyzer import analyze_serp, serp_to_prompt_context
 
 load_dotenv()
 
@@ -256,12 +269,27 @@ def get_client(api_key: str, base_url: str) -> OpenAI:
     return OpenAI(**kwargs)
 
 
+def _geo_prompt_section() -> str:
+    return """
+
+【GEO 优化规范 — Generative Engine Optimization】
+当前已启用 GEO 模式。请在 SEO 规范基础上额外遵守以下规则：
+- Answer-First：文章开头 40-100 字必须直接回答核心问题，不要铺垫
+- 问题式标题：至少 30% 的 H2 副标题使用问句（如 "MPChat 的安全性如何保障？"）
+- 数据引用：在文章中插入 5+ 个带出处的统计数据（如 "据 Chainalysis 2025 报告..."）
+- FAQ 段落：在文末加入 5 个 Q&A 对，每个答案 < 100 字
+- 短段落：每段 2-3 句，适合 AI 摘要提取
+- 权威引用：使用 "据...研究显示" 框架提升可信度
+- 实体一致性：全文统一使用 MPChat / MP Card / MP Wallet 等正式名称
+- 在 JSON 输出中额外增加字段 "faq_pairs": [{"q":"问题","a":"回答"},...]（5 对）
+"""
+
+
 def build_system_prompt(language: str, style_instruction: str,
-                        scenario_label: str, web_content: str = "") -> str:
-    lang_instruction = (
-        "请使用中文（简体）输出所有内容。" if language == "中文 (Chinese)"
-        else "Please output ALL content in English. Do not use Chinese anywhere in the article body."
-    )
+                        scenario_label: str, web_content: str = "",
+                        geo_mode: bool = False) -> str:
+    lang_cfg = LANGUAGES.get(language, LANGUAGES["中文 (Chinese)"])
+    lang_instruction = lang_cfg["instruction"]
     web_section = (
         f"\n\n【实时网络资料（来自 mp.net 官网 / Medium / Twitter / Google / 百度）】\n{web_content[:8000]}"
         if web_content.strip() else ""
@@ -320,7 +348,7 @@ def build_system_prompt(language: str, style_instruction: str,
 【image_search_terms 规范】
 - 提供 3-5 个英文关键词，用于在 Pixabay 搜索配图
 - 关键词要具体、视觉化（如 "digital payment smartphone" 而非 "crypto"）
-"""
+""" + (_geo_prompt_section() if geo_mode else "")
 
 
 def build_user_prompt(language, scenario_label, audience_tag,
@@ -436,9 +464,10 @@ def _robust_parse(raw: str) -> dict:
 
 def generate_article(client, model, language, scenario_label, audience_tag,
                      selling_points_text, style_name, style_instruction,
-                     keywords, web_content=""):
+                     keywords, web_content="", geo_mode=False):
     system_prompt = build_system_prompt(language, style_instruction,
-                                        scenario_label, web_content)
+                                        scenario_label, web_content,
+                                        geo_mode=geo_mode)
     user_prompt = build_user_prompt(language, scenario_label, audience_tag,
                                     selling_points_text, style_name, keywords)
     try:
@@ -499,7 +528,7 @@ def insert_images_into_article(article_text: str, images: list[dict],
         img = images[idx]
         img_md = (
             f"\n![{img['alt_text']}]({img['url']})\n"
-            f"*📷 {img['photographer']} via [Pixabay]({img['page_url']})*\n"
+            f"*📷 {img['photographer']} via [{img.get('source', 'Pixabay')}]({img['page_url']})*\n"
         )
         lines.insert(pos + 1 + offset, img_md)
         offset += 1
@@ -510,7 +539,7 @@ def insert_images_into_article(article_text: str, images: list[dict],
 # Streamlit 页面配置 + 全局样式
 # ══════════════════════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="MPChat 智能软文生成器 v3.1",
+    page_title="MPChat 智能软文生成器 v4.0",
     page_icon="🌿",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -592,8 +621,8 @@ st.markdown("""
   <div><div style="font-size:2.2rem;">🌿</div></div>
   <div>
     <h1>MPChat 智能软文生成器</h1>
-    <p>32+ 场景 · 25+ 卖点 · 7 种文风 · Pixabay 实图 · SEO 工具箱 · 批量生成</p>
-    <span class="mp-badge">v3.1 — Live with Crypto</span>
+    <p>37+ 场景 · 25+ 卖点 · 16 种语言 · 多图库 · GEO + SEO 双优化 · 多平台分发</p>
+    <span class="mp-badge">v4.0 — Live with Crypto</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -637,8 +666,22 @@ with st.sidebar:
 
     # ── 🌐 语言 ──────────────────────────────────────────────────────────────
     st.markdown("### 🌐 语言")
-    language = st.radio("输出语言", ["中文 (Chinese)", "英文 (English)"],
-                        index=0, label_visibility="collapsed")
+    lang_options = list(LANGUAGES.keys())
+    language = st.selectbox("输出语言", lang_options, index=0,
+                            label_visibility="collapsed")
+
+    st.divider()
+
+    # ── 🧠 优化模式 ─────────────────────────────────────────────────────────
+    st.markdown("### 🧠 优化模式")
+    opt_mode = st.radio(
+        "优化模式",
+        ["SEO 模式", "SEO + GEO 双优化"],
+        index=0,
+        label_visibility="collapsed",
+        help="GEO = Generative Engine Optimization，优化 AI 搜索引擎（ChatGPT / Perplexity / Gemini）的可见性",
+    )
+    geo_mode = opt_mode == "SEO + GEO 双优化"
 
     st.divider()
 
@@ -733,20 +776,27 @@ with st.sidebar:
 
     st.divider()
 
-    # ── 🖼️ Pixabay 配图 ──────────────────────────────────────────────────────
-    st.markdown("### 🖼️ Pixabay 配图")
-    use_pixabay = st.toggle("获取 Pixabay 实际图片", value=True,
-                            help="免费图库，无需署名，100 次/分钟")
+    # ── 🖼️ 多图库配图 ──────────────────────────────────────────────────────
+    st.markdown("### 🖼️ 多图库配图")
+    use_pixabay = st.toggle("获取配图（Placewise + Pixabay）", value=True,
+                            help="Placewise 聚合 Pixabay/Pexels/Unsplash，Pixabay 为备用")
     pixabay_key = ""
     if use_pixabay:
         pixabay_key = st.text_input(
-            "Pixabay API Key",
+            "Pixabay API Key（备用）",
             value=os.getenv("PIXABAY_API_KEY", "46561407-37c6214d0e52dffc32a430eb3"),
             type="password",
-            placeholder="从 pixabay.com/api/docs 获取",
+            placeholder="Placewise 失败时自动切换到 Pixabay",
         )
-        if not pixabay_key:
-            st.caption("⚠️ 未填写 Key，将仅显示 AI 提示词")
+
+    st.divider()
+
+    # ── 🔍 SERP 分析 ─────────────────────────────────────────────────────────
+    st.markdown("### 🔍 SERP 分析")
+    use_serp = st.toggle("生成前分析 Google Top 10", value=False,
+                         help="爬取目标关键词的 Google 排名前 10 页面，提取内容策略注入 AI Prompt")
+    if use_serp:
+        st.caption("✅ 已开启 · 生成时自动分析竞品 SERP（约多 10 秒）")
 
     st.divider()
 
@@ -758,9 +808,24 @@ with st.sidebar:
         st.caption("✅ 已开启 · 点击「生成」时自动并行抓取 10 个来源")
 
     st.divider()
+
+    # ── 📡 多平台分发 ─────────────────────────────────────────────────────────
+    st.markdown("### 📡 多平台分发")
+    with st.expander("API Key 配置（可选）"):
+        devto_key = st.text_input("Dev.to API Key", type="password",
+                                  value=os.getenv("DEVTO_API_KEY", ""),
+                                  placeholder="从 dev.to/settings/extensions 获取")
+        hashnode_token = st.text_input("Hashnode Token", type="password",
+                                       value=os.getenv("HASHNODE_TOKEN", ""),
+                                       placeholder="从 hashnode.com/settings/developer 获取")
+        hashnode_pub_id = st.text_input("Hashnode Publication ID",
+                                        value=os.getenv("HASHNODE_PUB_ID", ""),
+                                        placeholder="从 Hashnode 博客设置获取")
+
+    st.divider()
     st.markdown(
         "<div style='color:#4b5563;font-size:0.75rem;text-align:center;'>"
-        "MPChat 智能软文生成器 v3.1<br/>Live with Crypto 🌿</div>",
+        "MPChat 智能软文生成器 v4.0<br/>Live with Crypto 🌿</div>",
         unsafe_allow_html=True,
     )
 
@@ -842,6 +907,7 @@ with st.expander("📦 批量生成模式", expanded=False):
                             style_instruction=bstyle_obj["instruction"],
                             keywords=bsc.get("keywords", ""),
                             web_content=bweb,
+                            geo_mode=geo_mode,
                         )
                         batch_results.append(
                             {"scenario": bsc, "result": br, "ok": True}
@@ -907,6 +973,22 @@ if generate_btn:
                 f"网络抓取完成：{ok_count}/{len(web_status)} 个来源"
             )
 
+        serp_context = ""
+        if use_serp and keywords.strip():
+            st.write("🔍 正在分析 Google Top 10 竞品...")
+            primary_kw = keywords.strip().split(",")[0].strip()
+            try:
+                serp_data = analyze_serp(primary_kw)
+                st.session_state["last_serp"] = serp_data
+                serp_context = serp_to_prompt_context(serp_data)
+                st.write(f"✅ SERP 分析完成：{len(serp_data.get('results', []))} 条竞品数据")
+            except Exception as serp_err:
+                st.write(f"⚠️ SERP 分析失败：{serp_err}")
+
+        combined_web = web_content
+        if serp_context:
+            combined_web = web_content + "\n\n" + serp_context if web_content else serp_context
+
         st.write("🤖 AI 正在撰写文章（约 15-30 秒）...")
         try:
             client = get_client(api_key_input, base_url_input)
@@ -920,13 +1002,15 @@ if generate_btn:
                 style_name=selected_style_key,
                 style_instruction=style_obj["instruction"],
                 keywords=keywords,
-                web_content=web_content,
+                web_content=combined_web,
+                geo_mode=geo_mode,
             )
             st.session_state["last_result"] = result
             st.session_state["last_language"] = language
             st.session_state["last_keywords"] = keywords
             st.session_state["last_sp_ids"] = selected_sp_ids
             st.session_state["last_scenario"] = selected_scenario
+            st.session_state["last_geo_mode"] = geo_mode
             st.write("✅ 文章生成完成")
 
         except json.JSONDecodeError:
@@ -944,12 +1028,12 @@ if generate_btn:
                 st.error(f"❌ 生成失败：{err}")
             st.stop()
 
-        if use_pixabay and pixabay_key:
-            st.write("🖼️ 正在从 Pixabay 获取配图...")
+        if use_pixabay:
+            st.write("🖼️ 正在从图库获取配图（Placewise + Pixabay）...")
             scenario_terms = st.session_state["last_scenario"].get("pixabay_terms", [])
             ai_terms = result.get("image_search_terms", [])
             pixabay_images = fetch_images_for_article(
-                pixabay_key,
+                pixabay_key=pixabay_key,
                 scenario_terms=scenario_terms,
                 ai_terms=ai_terms,
                 per_query=2,
@@ -1055,7 +1139,7 @@ if "last_result" in st.session_state:
                 _img = _img_map[_li]
                 st.image(
                     _img['url'],
-                    caption=f"📷 {_img['photographer']} via Pixabay",
+                    caption=f"📷 {_img['photographer']} via {_img.get('source', 'Pixabay')}",
                     use_container_width=True,
                 )
         if _chunk:
@@ -1129,26 +1213,26 @@ if "last_result" in st.session_state:
 
     st.divider()
 
-    # ── Module C: 配图（Pixabay 实图 + AI Prompt） ───────────────────────────
+    # ── Module C: 配图（多图库 + AI Prompt） ────────────────────────────────
     st.markdown('<div class="output-card-title">🎨 模块 C — 文章配图</div>',
                 unsafe_allow_html=True)
 
     pixabay_images = st.session_state.get("last_pixabay", [])
     if pixabay_images:
-        st.markdown(f"**📸 Pixabay 实际图片（{len(pixabay_images)} 张）**")
+        st.markdown(f"**📸 图库实图（{len(pixabay_images)} 张）**")
         img_cols = st.columns(min(len(pixabay_images), 4))
         for i, img in enumerate(pixabay_images):
             with img_cols[i % len(img_cols)]:
                 st.image(img["url"], caption=img["alt_text"], use_container_width=True)
-                st.caption(f"📷 {img['photographer']} · [Pixabay]({img['page_url']})")
+                source = img.get("source", "Pixabay")
+                st.caption(f"📷 {img['photographer']} · [{source}]({img['page_url']})")
         st.divider()
     else:
         ai_search_terms = result.get("image_search_terms", [])
         st.info(
-            f"📷 未获取到 Pixabay 图片。\n\n"
+            f"📷 未获取到图片。\n\n"
             f"**AI 建议搜索词:** {', '.join(ai_search_terms) if ai_search_terms else '无'}\n\n"
-            f"请确认：① 已开启「获取 Pixabay 实际图片」开关 "
-            f"② Pixabay API Key 已正确填写"
+            f"请确认：已开启「获取配图」开关"
         )
 
     image_prompts = result.get("image_prompts", [])
@@ -1178,12 +1262,13 @@ if "last_result" in st.session_state:
 
     st.divider()
 
-    # ── Module D: SEO 工具箱 ─────────────────────────────────────────────────
-    st.markdown('<div class="output-card-title">🛠️ 模块 D — SEO 工具箱</div>',
+    # ── Module D: SEO / GEO 工具箱 ───────────────────────────────────────────
+    st.markdown('<div class="output-card-title">🛠️ 模块 D — SEO / GEO 工具箱</div>',
                 unsafe_allow_html=True)
 
-    tab_schema, tab_links, tab_stats = st.tabs(
-        ["📋 Schema JSON-LD", "🔗 内部链接", "📊 阅读统计"]
+    tab_schema, tab_links, tab_stats, tab_geo, tab_ai_detect = st.tabs(
+        ["📋 Schema JSON-LD", "🔗 内部链接", "📊 SEO 评分",
+         "🧠 GEO 评分", "🤖 AI 检测"]
     )
 
     with tab_schema:
@@ -1195,6 +1280,14 @@ if "last_result" in st.session_state:
         )
         st.code(schema_json, language="json")
         st.caption("将此 JSON-LD 代码插入文章页面的 <head> 标签中")
+
+        faq_pairs = result.get("faq_pairs", [])
+        if faq_pairs:
+            st.divider()
+            st.markdown("**FAQPage Schema（GEO 加分项）**")
+            faq_schema = generate_faq_schema(faq_pairs)
+            st.code(faq_schema, language="json")
+            st.caption("FAQ Schema 有助于在 AI 搜索引擎和 Google 精选摘要中展示")
 
     with tab_links:
         last_sp = st.session_state.get("last_sp_ids", [])
@@ -1241,7 +1334,6 @@ if "last_result" in st.session_state:
         if stats["keyword_density"]:
             st.markdown("**关键词密度分析：**")
             for kw, info in stats["keyword_density"].items():
-                bar_pct = min(info["density_pct"] * 20, 100)
                 st.markdown(
                     f"- `{kw}` — 出现 {info['count']} 次，密度 {info['density_pct']}%"
                 )
@@ -1292,7 +1384,7 @@ if "last_result" in st.session_state:
                                 {"role": "user", "content": optimize_prompt},
                             ],
                             temperature=0.6,
-                            max_tokens=4000,
+                            max_tokens=8000,
                         )
                         optimized = opt_response.choices[0].message.content.strip()
                         if optimized.startswith("```"):
@@ -1308,7 +1400,282 @@ if "last_result" in st.session_state:
                     except Exception as e:
                         st.error(f"优化失败：{e}")
 
+    # ── Tab: GEO 评分 ────────────────────────────────────────────────────────
+    with tab_geo:
+        faq_pairs_for_geo = result.get("faq_pairs", [])
+        geo_result = geo_score(article, faq_pairs_for_geo)
+        g_score = geo_result["score"]
+
+        if g_score >= 80:
+            g_color = "#00c853"
+        elif g_score >= 50:
+            g_color = "#fbbf24"
+        else:
+            g_color = "#f87171"
+
+        gc1, gc2 = st.columns([1, 3])
+        with gc1:
+            st.markdown(
+                f"<div style='text-align:center;'>"
+                f"<div class='score-ring' style='border:3px solid {g_color};color:{g_color};font-size:2rem;'>"
+                f"{g_score}</div>"
+                f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>GEO 评分</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        with gc2:
+            details = geo_result["details"]
+            st.markdown(f"""
+| 指标 | 数值 |
+|---|---|
+| 开头段落长度 | {details['answer_first_len']} 字 |
+| 问句 H2 占比 | {details['question_h2_ratio']}% |
+| 数据引用数 | {details['citation_count']} 处 |
+| 长段落数 | {details['long_paragraphs']} 个 |
+| 实体提及数 | {details['entity_mentions']} 种 |
+| FAQ 数量 | {details['faq_count']} 对 |
+| 权威引用 | {details['authority_refs']} 处 |
+""")
+
+        if geo_result["issues"]:
+            st.markdown("**需改进的问题：**")
+            for iss in geo_result["issues"]:
+                st.markdown(f"- {iss}")
+        if geo_result["tips"]:
+            st.markdown("**优化建议：**")
+            for tip in geo_result["tips"]:
+                st.markdown(f"- {tip}")
+
+        if g_score < 90:
+            st.divider()
+            st.markdown(f"**当前 GEO 评分 {g_score}/100，建议优化到 90+ 以提升 AI 搜索可见性**")
+            if st.button("🧠 一键 GEO 优化到 90+", use_container_width=True,
+                         key="geo_optimize_btn"):
+                geo_opt_prompt = build_geo_optimize_prompt(
+                    article, geo_result,
+                    keywords=st.session_state.get("last_keywords", "")
+                )
+                with st.spinner("🤖 正在 GEO 优化中..."):
+                    try:
+                        opt_client = get_client(api_key_input, base_url_input)
+                        opt_response = opt_client.chat.completions.create(
+                            model=model_input.strip() if model_input else "gemini-2.5-flash",
+                            messages=[
+                                {"role": "system", "content": "你是 GEO（Generative Engine Optimization）专家，专门优化内容以提升在 ChatGPT、Perplexity、Gemini 等 AI 搜索引擎中的可见性。请直接输出优化后的 Markdown 文章。"},
+                                {"role": "user", "content": geo_opt_prompt},
+                            ],
+                            temperature=0.6,
+                            max_tokens=8000,
+                        )
+                        optimized = opt_response.choices[0].message.content.strip()
+                        if optimized.startswith("```"):
+                            opt_lines = optimized.split("\n")
+                            opt_inner = "\n".join(opt_lines[1:])
+                            if "```" in opt_inner:
+                                optimized = opt_inner[:opt_inner.rfind("```")].strip()
+                            else:
+                                optimized = opt_inner.strip()
+
+                        st.session_state["last_result"]["article"] = optimized
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"GEO 优化失败：{e}")
+
+    # ── Tab: AI 检测 + 人性化 ────────────────────────────────────────────────
+    with tab_ai_detect:
+        st.markdown("**AI 内容检测 & 人性化改写**")
+        st.caption("检测文章的 AI 生成痕迹，并提供一键人性化改写")
+
+        if st.button("🔍 检测 AI 痕迹", use_container_width=True, key="ai_detect_btn"):
+            detect_prompt = f"""请分析以下文章，评估其被 AI 检测工具（如 GPTZero、Originality.ai）判定为 AI 生成内容的可能性。
+
+请输出：
+1. AI 检测评分（0-100，0=完全人类，100=明显 AI）
+2. 检测到的 AI 痕迹列表
+3. 具体哪些段落或表述最像 AI 生成
+
+请用以下格式输出：
+AI 评分：XX/100
+AI 痕迹：
+- xxx
+- xxx
+高风险段落：
+- "xxx" — 原因：xxx
+
+【文章】
+{article}"""
+
+            with st.spinner("🔍 正在检测 AI 痕迹..."):
+                try:
+                    det_client = get_client(api_key_input, base_url_input)
+                    det_response = det_client.chat.completions.create(
+                        model=model_input.strip() if model_input else "gemini-2.5-flash",
+                        messages=[
+                            {"role": "system", "content": "你是 AI 内容检测专家，擅长分析文本是否由 AI 生成。"},
+                            {"role": "user", "content": detect_prompt},
+                        ],
+                        temperature=0.3,
+                        max_tokens=2000,
+                    )
+                    detect_result = det_response.choices[0].message.content.strip()
+                    st.session_state["ai_detect_result"] = detect_result
+                except Exception as e:
+                    st.error(f"检测失败：{e}")
+
+        if st.session_state.get("ai_detect_result"):
+            st.markdown(st.session_state["ai_detect_result"])
+            st.divider()
+
+        if st.button("✍️ 一键人性化改写", use_container_width=True, key="humanize_btn"):
+            humanize_prompt = f"""请将以下文章进行人性化改写，降低 AI 检测率，同时保持 SEO 质量和核心信息不变。
+
+改写要求：
+- 使用更多口语化、个人化的表达
+- 增加主观感受和个人经历描写
+- 打破 AI 写作的固定句式（避免"首先…其次…最后…"等模式）
+- 适当使用不完美的表达（如省略、口语缩写）
+- 增加具体细节和故事元素
+- 保持所有关键词的自然分布
+- 不改变文章结构（H1/H2）和核心卖点
+- 保留 CTA
+
+【原文】
+{article}
+
+请直接输出改写后的完整文章（Markdown 格式）。"""
+
+            with st.spinner("✍️ 正在人性化改写中..."):
+                try:
+                    hum_client = get_client(api_key_input, base_url_input)
+                    hum_response = hum_client.chat.completions.create(
+                        model=model_input.strip() if model_input else "gemini-2.5-flash",
+                        messages=[
+                            {"role": "system", "content": "你是一位资深的人类内容编辑，擅长将 AI 生成的内容改写为自然的人类写作风格，同时保持 SEO 效果。"},
+                            {"role": "user", "content": humanize_prompt},
+                        ],
+                        temperature=0.8,
+                        max_tokens=8000,
+                    )
+                    humanized = hum_response.choices[0].message.content.strip()
+                    if humanized.startswith("```"):
+                        h_lines = humanized.split("\n")
+                        h_inner = "\n".join(h_lines[1:])
+                        if "```" in h_inner:
+                            humanized = h_inner[:h_inner.rfind("```")].strip()
+                        else:
+                            humanized = h_inner.strip()
+
+                    st.session_state["last_result"]["article"] = humanized
+                    st.session_state["ai_detect_result"] = ""
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"人性化改写失败：{e}")
+
     st.divider()
+
+    # ── Module E: 多平台分发 ──────────────────────────────────────────────────
+    st.markdown('<div class="output-card-title">📡 模块 E — 多平台分发</div>',
+                unsafe_allow_html=True)
+
+    dist_tabs = st.tabs([
+        "🔗 Dev.to", "🔗 Hashnode", "📝 Medium", "💼 LinkedIn",
+        "🐦 Twitter", "📖 知乎", "📱 微信公众号", "🔐 加密博客"
+    ])
+
+    slug = result.get("slug_suggestion", "")
+
+    with dist_tabs[0]:
+        st.markdown("**Dev.to — API 直发**")
+        if devto_key:
+            pub_draft = st.radio("发布模式", ["草稿", "直接发布"],
+                                 index=0, key="devto_mode")
+            if st.button("📤 发布到 Dev.to", key="pub_devto"):
+                with st.spinner("正在发布..."):
+                    res = publish_to_devto(
+                        devto_key, seo_title, article,
+                        tags=["crypto", "payment", "web3", "fintech"],
+                        published=(pub_draft == "直接发布"),
+                    )
+                    if res["ok"]:
+                        st.success(f"发布成功！{res['url']}")
+                    else:
+                        st.error(f"发布失败：{res['error']}")
+        else:
+            st.info("请在左侧「多平台分发」中配置 Dev.to API Key")
+
+    with dist_tabs[1]:
+        st.markdown("**Hashnode — API 直发**")
+        if hashnode_token and hashnode_pub_id:
+            if st.button("📤 发布到 Hashnode", key="pub_hashnode"):
+                with st.spinner("正在发布..."):
+                    res = publish_to_hashnode(
+                        hashnode_token, hashnode_pub_id,
+                        seo_title, article,
+                        tags=["crypto", "payment", "web3"],
+                        slug=slug,
+                    )
+                    if res["ok"]:
+                        st.success(f"发布成功！{res['url']}")
+                    else:
+                        st.error(f"发布失败：{res['error']}")
+        else:
+            st.info("请在左侧「多平台分发」中配置 Hashnode Token 和 Publication ID")
+
+    with dist_tabs[2]:
+        st.markdown("**Medium — 格式化复制**")
+        medium_text = format_for_medium(seo_title, article, meta_desc)
+        st.text_area("Medium 格式（Markdown）", medium_text, height=300, key="medium_copy")
+        st.caption("复制后在 Medium 新文章页面使用 Markdown 导入")
+
+    with dist_tabs[3]:
+        st.markdown("**LinkedIn — 格式化复制**")
+        linkedin_text = format_for_linkedin(seo_title, article)
+        st.text_area("LinkedIn 帖子", linkedin_text, height=300, key="linkedin_copy")
+        st.caption(f"字符数：{len(linkedin_text)} / 3000")
+
+    with dist_tabs[4]:
+        st.markdown("**Twitter — 线程拆分**")
+        thread = format_for_twitter_thread(seo_title, article)
+        for i, tweet in enumerate(thread):
+            st.text_area(f"Tweet {i+1}", tweet, height=80,
+                         key=f"tweet_{i}", disabled=True)
+        st.caption(f"共 {len(thread)} 条推文")
+
+    with dist_tabs[5]:
+        st.markdown("**知乎 — 格式化复制**")
+        zhihu_text = format_for_zhihu(seo_title, article)
+        st.text_area("知乎文章", zhihu_text, height=300, key="zhihu_copy")
+
+    with dist_tabs[6]:
+        st.markdown("**微信公众号 — 纯文本**")
+        wechat_text = format_for_wechat(seo_title, article)
+        st.text_area("公众号文章", wechat_text, height=300, key="wechat_copy")
+        st.caption("已自动去除外链和 Markdown 格式")
+
+    with dist_tabs[7]:
+        st.markdown("**加密博客投稿 — Frontmatter 格式**")
+        crypto_text = format_for_crypto_submission(
+            seo_title, article, meta_desc, slug=slug,
+        )
+        st.text_area("投稿包", crypto_text, height=300, key="crypto_copy")
+        st.caption("适用于 CoinTelegraph / Bitcoin Magazine / Decrypt 等投稿")
+
+    st.divider()
+
+    # ── SERP 分析结果 ─────────────────────────────────────────────────────────
+    serp_data = st.session_state.get("last_serp")
+    if serp_data and serp_data.get("results"):
+        with st.expander("🔍 SERP 竞品分析结果", expanded=False):
+            st.markdown(f"**关键词：** `{serp_data['keyword']}`")
+            st.markdown(f"**分析竞品数：** {len(serp_data['results'])}")
+            for i, sr in enumerate(serp_data["results"][:10], 1):
+                st.markdown(f"{i}. [{sr['title']}]({sr['url']})")
+                if sr.get("snippet"):
+                    st.caption(sr["snippet"][:150])
+            if serp_data.get("recommendation"):
+                st.markdown("**策略建议：**")
+                st.markdown(serp_data["recommendation"])
+
     with st.expander("🔧 查看完整 JSON（调试用）"):
         st.json(result)
 
@@ -1321,7 +1688,7 @@ else:
         在左侧选择写作场景和参数，点击「🚀 生成高质量软文」开始创作
     </div>
     <div style="font-size:0.85rem; color:#374151;">
-        32+ 细分场景 · 7 种文风 · Pixabay 实图 · SEO 工具箱 · 批量生成 · A/B 标题
+        37+ 细分场景 · 16 种语言 · GEO + SEO 双优化 · 多平台分发 · 批量生成 · A/B 标题
     </div>
 </div>
 """, unsafe_allow_html=True)
