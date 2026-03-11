@@ -1202,10 +1202,6 @@ if generate_btn:
 # ══════════════════════════════════════════════════════════════════════════════
 # 输出展示
 # ══════════════════════════════════════════════════════════════════════════════
-if st.session_state.get("_pending_rerun"):
-    st.session_state["_pending_rerun"] = False
-    st.rerun()
-
 if "last_result" in st.session_state:
     result = st.session_state["last_result"]
 
@@ -1538,8 +1534,7 @@ if "last_result" in st.session_state:
                                 optimized = opt_inner.strip()
 
                         st.session_state["last_result"]["article"] = optimized
-                        st.session_state["_pending_rerun"] = True
-                        st.toast('✅ SEO 优化完成！页面即将刷新...', icon='✨')
+                        st.success("SEO 优化完成！文章已更新，切换其他 Tab 或滚动上方查看新内容。")
                     except Exception as e:
                         st.error(f"优化失败：{e}")
 
@@ -1620,8 +1615,7 @@ if "last_result" in st.session_state:
                                 optimized = opt_inner.strip()
 
                         st.session_state["last_result"]["article"] = optimized
-                        st.session_state["_pending_rerun"] = True
-                        st.toast('✅ GEO 优化完成！页面即将刷新...', icon='✨')
+                        st.success("GEO 优化完成！文章已更新，切换其他 Tab 或滚动上方查看新内容。")
                     except Exception as e:
                         st.error(f"GEO 优化失败：{e}")
 
@@ -1698,15 +1692,14 @@ if "last_result" in st.session_state:
                                 optimized = d_inner.strip()
 
                         st.session_state["last_result"]["article"] = optimized
-                        st.session_state["_pending_rerun"] = True
-                        st.toast(f'✅ 双优化完成！（优化前：SEO {seo_s} / GEO {geo_s}）', icon='✨')
+                        st.success(f"双优化完成！（优化前：SEO {seo_s} / GEO {geo_s}）文章已更新。")
                     except Exception as e:
                         st.error(f"双优化失败：{e}")
 
     # ── Tab: AI 检测 + 人性化 ────────────────────────────────────────────────
     with tab_ai_detect:
         st.markdown("**AI 内容检测 & 人性化改写**")
-        st.caption("检测文章的 AI 生成痕迹，并提供一键人性化改写")
+        st.caption("检测 AI 生成痕迹，一键人性化改写，或三合一优化（SEO + GEO + 人性化）")
 
         if st.button("🔍 检测 AI 痕迹", use_container_width=True, key="ai_detect_btn"):
             detect_prompt = f"""请分析以下文章，评估其被 AI 检测工具（如 GPTZero、Originality.ai）判定为 AI 生成内容的可能性。
@@ -1748,23 +1741,40 @@ AI 痕迹：
             st.markdown(st.session_state["ai_detect_result"])
             st.divider()
 
-        if st.button("✍️ 一键人性化改写", use_container_width=True, key="humanize_btn"):
-            humanize_prompt = f"""请将以下文章进行人性化改写，降低 AI 检测率，同时保持 SEO 质量和核心信息不变。
+        kw_human = st.session_state.get("last_keywords", "MPChat, 加密支付")
 
-改写要求：
-- 使用更多口语化、个人化的表达
-- 增加主观感受和个人经历描写
-- 打破 AI 写作的固定句式（避免"首先…其次…最后…"等模式）
-- 适当使用不完美的表达（如省略、口语缩写）
-- 增加具体细节和故事元素
-- 保持所有关键词的自然分布
-- 不改变文章结构（H1/H2）和核心卖点
-- 保留 CTA
+        col_hum, col_tri = st.columns(2)
+
+        with col_hum:
+            do_humanize = st.button("✍️ 人性化改写", use_container_width=True, key="humanize_btn")
+        with col_tri:
+            do_triple = st.button("🚀 三合一优化", use_container_width=True, key="triple_btn",
+                                  help="同时优化 SEO + GEO + 降低 AI 检测率")
+
+        if do_humanize:
+            humanize_prompt = f"""请将以下文章进行人性化改写，目标：降低 AI 检测率至 30 以下。
+
+⚠️ 核心约束：人性化的同时 必须保留 以下 SEO / GEO 结构元素（不可删除或弱化）：
+1. H1 标题（#）和所有 H2 标题（##）的结构与关键词
+2. 关键词自然分布：{kw_human}
+3. 所有数据引用和统计数字（如「据...报告，...」格式）
+4. FAQ 段落（## 常见问题）及其全部 Q&A 对
+5. CTA 段落（引导下载 MPChat 或申请 MP Card）
+6. 产品实体名称 MPChat / MP Card / MP Wallet / mp.net
+7. 权威来源引用（Chainalysis、CoinDesk 等）
+
+人性化改写技巧（在保留以上结构的前提下应用）：
+- 口语化、个人化表达（如「说实话」「我自己的体验是」）
+- 增加主观感受和具体细节
+- 打破 AI 固定句式（避免「首先…其次…最后…」等模板）
+- 变化句子长度（短句长句交替，偶尔用感叹句、反问句）
+- 适当使用不完美表达（口语缩写、省略）
+- 增加故事元素和场景描写
 
 【原文】
 {article}
 
-请直接输出改写后的完整文章（Markdown 格式）。"""
+请直接输出改写后的完整文章（Markdown 格式），保留所有 H1/H2/FAQ/CTA 结构。"""
 
             with st.spinner("✍️ 正在人性化改写中..."):
                 try:
@@ -1772,7 +1782,7 @@ AI 痕迹：
                     hum_response = hum_client.chat.completions.create(
                         model=model_input.strip() if model_input else "gemini-2.5-flash",
                         messages=[
-                            {"role": "system", "content": "你是一位资深的人类内容编辑，擅长将 AI 生成的内容改写为自然的人类写作风格，同时保持 SEO 效果。"},
+                            {"role": "system", "content": "你是一位资深的人类内容编辑。改写时必须保留文章的 H1/H2 标题结构、FAQ 段落、CTA、数据引用和关键词分布，只改写行文风格使之更自然。"},
                             {"role": "user", "content": humanize_prompt},
                         ],
                         temperature=0.8,
@@ -1789,10 +1799,47 @@ AI 痕迹：
 
                     st.session_state["last_result"]["article"] = humanized
                     st.session_state["ai_detect_result"] = ""
-                    st.session_state["_pending_rerun"] = True
-                    st.toast('✅ 人性化改写完成！页面即将刷新...', icon='✨')
+                    st.success("人性化改写完成！文章已更新，切换其他 Tab 查看新评分。")
                 except Exception as e:
                     st.error(f"人性化改写失败：{e}")
+
+        if do_triple:
+            from geo_tools import build_triple_optimize_prompt
+            faq_tri = result.get("faq_pairs", [])
+            geo_tri = geo_score(article, faq_tri)
+            stats_tri = reading_stats(article, kw_human)
+            triple_prompt = build_triple_optimize_prompt(
+                article, stats_tri, geo_tri, keywords=kw_human
+            )
+
+            with st.spinner("🚀 三合一优化中（SEO + GEO + 人性化，约 40 秒）..."):
+                try:
+                    tri_client = get_client(api_key_input, base_url_input)
+                    tri_response = tri_client.chat.completions.create(
+                        model=model_input.strip() if model_input else "gemini-2.5-flash",
+                        messages=[
+                            {"role": "system", "content": "你是同时精通 SEO、GEO 和人性化写作的内容专家。你的目标是输出一篇 SEO ≥ 90、GEO ≥ 90、AI 检测率 ≤ 30 的文章。"},
+                            {"role": "user", "content": triple_prompt},
+                        ],
+                        temperature=0.7,
+                        max_tokens=10000,
+                    )
+                    tripled = tri_response.choices[0].message.content.strip()
+                    if tripled.startswith("```"):
+                        t_lines = tripled.split("\n")
+                        t_inner = "\n".join(t_lines[1:])
+                        if "```" in t_inner:
+                            tripled = t_inner[:t_inner.rfind("```")].strip()
+                        else:
+                            tripled = t_inner.strip()
+
+                    seo_before = stats_tri.get("structure_score", 0)
+                    geo_before = geo_tri["score"]
+                    st.session_state["last_result"]["article"] = tripled
+                    st.session_state["ai_detect_result"] = ""
+                    st.success(f"三合一优化完成！（优化前：SEO {seo_before} / GEO {geo_before}）文章已更新。")
+                except Exception as e:
+                    st.error(f"三合一优化失败：{e}")
 
     st.divider()
 

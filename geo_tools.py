@@ -263,3 +263,92 @@ def build_dual_optimize_prompt(
 {article}
 
 请直接输出优化后的完整文章（Markdown 格式），不要输出 JSON，不要解释修改内容。"""
+
+
+def build_triple_optimize_prompt(
+    article: str,
+    seo_stats: dict,
+    geo_result: dict,
+    keywords: str = "",
+) -> str:
+    """Build prompt for SEO + GEO + Humanization triple optimization."""
+    seo_issues: list[str] = []
+    if seo_stats.get("h1_count", 0) < 1:
+        seo_issues.append("缺少 H1 标题")
+    if seo_stats.get("h2_count", 0) < 3:
+        seo_issues.append(f"H2 段落不足（当前 {seo_stats.get('h2_count', 0)} 个，需 ≥3）")
+    if not seo_stats.get("has_cta"):
+        seo_issues.append("缺少 CTA")
+    if seo_stats.get("word_count", 0) < 600:
+        seo_issues.append(f"字数偏少（{seo_stats.get('word_count', 0)}）")
+    kw_density = seo_stats.get("keyword_density", {})
+    low_kw = [k for k, v in kw_density.items() if v.get("count", 0) < 2]
+    if low_kw:
+        seo_issues.append(f"关键词密度不足：{', '.join(low_kw)}")
+
+    geo_issues = geo_result.get("issues", [])
+
+    seo_text = "\n".join(f"- {i}" for i in seo_issues) if seo_issues else "- 无严重问题"
+    geo_text = "\n".join(f"- {i}" for i in geo_issues) if geo_issues else "- 无严重问题"
+
+    kw = keywords if keywords else "MPChat, 加密支付"
+
+    return f"""请对以下文章执行三合一优化，同时达成三个目标：
+1. SEO 评分 ≥ 90
+2. GEO 评分 ≥ 90
+3. AI 检测率 ≤ 30（GPTZero / Originality.ai 标准）
+
+⚠️ 关键约束：三者必须同时兼顾。SEO/GEO 的结构性元素是硬性要求，人性化在这些框架内进行。
+
+【当前 SEO 评分】{seo_stats.get('structure_score', 0)}/100
+【当前 GEO 评分】{geo_result['score']}/100
+
+【SEO 问题】
+{seo_text}
+
+【GEO 问题】
+{geo_text}
+
+══════════════════════════════════════════
+A. SEO 硬性要求（结构层，不可删减）
+══════════════════════════════════════════
+1. 1 个 H1（#）+ 至少 4 个 H2（##），标题含关键词
+2. 关键词密度 1-2%（关键词：{kw}）
+3. 结尾有明确 CTA（引导下载 MPChat / 申请 MP Card）
+4. 总长度 800-1200 字
+5. 每段 ≤ 150 字
+
+══════════════════════════════════════════
+B. GEO 硬性要求（结构层，不可删减）
+══════════════════════════════════════════
+1. Answer-First：开头 40-100 字直接回答核心问题
+2. 问句 H2：至少 30% 的 H2 用问句格式
+3. 数据引用：5+ 处带来源的统计数据
+4. 权威引用：3+ 处「据 [来源] 研究/报告显示」
+5. 实体一致：MPChat / MP Card / MP Wallet / mp.net 全文统一
+6. 文末 FAQ：## 常见问题 段落，含 5 个 Q&A
+
+══════════════════════════════════════════
+C. 人性化要求（在 A/B 框架内改写风格）
+══════════════════════════════════════════
+1. 用第一人称或口语化叙述（「说实话」「我个人的经验是」）
+2. 增加具体场景和故事细节（如在咖啡店付款、跨境转账经历）
+3. 打破 AI 句式模板：禁用「首先…其次…最后…」「值得注意的是」「总的来说」
+4. 句子长度变化：短句（<10 字）与长句交替
+5. 偶尔使用感叹句、反问句、省略句
+6. 数据引用用人性化表述（如「查了下 Chainalysis 的报告，发现...」而非「据 Chainalysis 报告显示」）
+7. H2 标题可以带个性（如「MP Card 到底香不香？」而非「MP Card 是否值得使用？」）
+
+══════════════════════════════════════════
+D. 三者兼容策略
+══════════════════════════════════════════
+- H2 标题 = 问句（GEO）+ 含关键词（SEO）+ 口语化（人性化）
+- 数据引用 = 带来源（GEO）+ 个人化表述包裹（人性化）
+- FAQ = 结构化 Q&A（GEO/SEO）+ 答案用口语写（人性化）
+- CTA = 明确行动引导（SEO）+ 用第一人称推荐语气（人性化）
+- 短段落 = 2-3 句（GEO）+ 偶尔单句段落增加节奏感（人性化）
+
+【原文】
+{article}
+
+请直接输出优化后的完整文章（Markdown 格式），不要输出 JSON，不要解释修改内容。"""
