@@ -1,7 +1,7 @@
 # MPChat 智能软文生成器 — 产品设计说明文档
 
-**版本：v4.0 (规划)**
-**当前版本：v3.1 (已上线)**
+**版本：v4.0.1**
+**当前版本：v4.0.1 (已上线)**
 **最后更新：2026-03-11**
 **开发工具：全部代码（后端逻辑 + Streamlit UI + 工具模块）由 Claude Opus 编写和维护**
 
@@ -105,12 +105,17 @@ Phase 2 — 发展中市场 (6 种)：
 - 🗣️ 用户证言型：口语化，个人情感，真实感
 - 📋 清单盘点型：Top-N格式，信息密度高，易传播
 
-### 3.6 配图系统（多图源聚合）
+### 3.6 配图系统（3 级图源策略）
 
-- Placewise（主图源）：聚合 Pixabay + Pexels + Unsplash，无需 API Key，语义搜索，1000 张/月
-- Pixabay（备用图源）：API Key 直连，100 次/分钟，Placewise 额度耗尽时自动切换
+采用 3 级 fallback 架构，确保始终有图可用：
+
+- **Tier 1 — Pixabay（主图源）**：REST API 搜索，返回高分辨率图片 + 摄影师元数据，100 次/分钟，需 API Key
+- **Tier 2 — Pexels（补充图源）**：REST API 搜索，200 次/小时免费额度，需 API Key（可选）
+- **Tier 3 — Placewise CDN（兜底）**：URL-based 语义图片服务（`img.placewise.io/800x600-query`），无需 API Key，当 Pixabay + Pexels 均无结果时自动启用
 - 自动在文章 H2 标题后插入配图（st.image() 渲染）
 - AI 配图提示词（Midjourney / DALL-E）同时输出
+
+注意：Placewise 是 URL-based CDN 服务（非 REST 搜索 API），通过语义 slug 直接生成图片 URL。
 
 ### 3.7 网络知识库
 
@@ -222,6 +227,54 @@ MPChat-软文机器人/
 2. SEO + GEO 双优化
 3. 零成本（自备 LLM API Key）
 4. 多平台分发闭环（生成 → 格式化 → 发布）
-5. 多图库聚合（Placewise 聚合 3 大免费图库）
+5. 3 级图源 fallback（Pixabay → Pexels → Placewise CDN）
 6. 5 层容错 JSON 解析
 7. 37+ 深度定制场景
+
+---
+
+## 9. 已知问题与修复记录 (v4.0.1)
+
+### 9.1 配图无法加载（v4.0 → v4.0.1 修复）
+
+**问题描述：** 启用「获取配图」开关后，Module C 显示「未获取到图片」，文章正文无配图。
+
+**根因分析：**
+- `image_client.py` 调用 `https://placewise.io/api/v1/search`，但该 REST API 端点不存在
+- Placewise 实际上是 URL-based CDN 服务，正确用法是 `https://img.placewise.io/800x600-query`
+- Placewise 搜索永远返回空结果 → 触发 Pixabay fallback → Pixabay 如果也失败则 0 图
+
+**修复方案：** 重构为 3 级 fallback 架构
+1. Tier 1: Pixabay REST API 搜索（主图源，v3.1 已验证可用）
+2. Tier 2: Pexels REST API 搜索（补充图源，可选 API Key）
+3. Tier 3: Placewise CDN URL 构建（兜底，无需 API Key）
+
+**影响文件：** `image_client.py`, `app.py`（侧边栏新增 Pexels Key 输入）
+
+### 9.2 SEO/GEO 优化按钮无响应（v4.0 → v4.0.1 修复）
+
+**问题描述：** 点击「一键 SEO 优化到 90+」或「一键 GEO 优化到 90+」后，加载动画出现但页面无变化。
+
+**根因分析：**
+- 按钮点击后 LLM 返回优化文章，代码调用 `st.rerun()` 刷新页面
+- `st.rerun()` 在 `st.spinner()` + `st.tabs()` 嵌套上下文内调用时行为异常
+- 页面重新执行后，Tab 重置到第一个（Schema），用户看不到优化结果
+- 部分情况下 `st.rerun()` 在嵌套上下文中被 Streamlit 静默忽略
+
+**修复方案：** 延迟 rerun 模式
+1. 优化完成后，结果写入 `st.session_state`，设置 `_pending_rerun = True`
+2. 显示 `st.success()` 反馈消息
+3. 在输出区域顶部检测 `_pending_rerun` flag，在安全上下文中执行 `st.rerun()`
+4. 同样模式应用于 SEO 优化、GEO 优化、人性化改写三个按钮
+
+**影响文件：** `app.py`（Module D 三个优化按钮 + 输出区域顶部 rerun 检查）
+
+### 9.3 API Key 安全存储（v4.0 → v4.0.1 修复）
+
+**问题描述：** Gemini API Key 硬编码在源码中，推送到 GitHub 后被 Google 自动扫描吊销。
+
+**修复方案：**
+1. 从代码中移除所有明文 API Key
+2. 使用 `st.secrets["GEMINI_API_KEY"]` 从 Streamlit Cloud Secrets 安全读取
+3. 回退到 `os.getenv("OPENAI_API_KEY")` 支持本地开发
+4. 用户可在侧边栏手动输入覆盖

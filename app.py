@@ -783,15 +783,22 @@ with st.sidebar:
 
     # ── 🖼️ 多图库配图 ──────────────────────────────────────────────────────
     st.markdown("### 🖼️ 多图库配图")
-    use_pixabay = st.toggle("获取配图（Placewise + Pixabay）", value=True,
-                            help="Placewise 聚合 Pixabay/Pexels/Unsplash，Pixabay 为备用")
+    use_images = st.toggle("获取配图（Pixabay + Pexels + Placewise）", value=True,
+                           help="Pixabay 为主图源，Pexels 补充，Placewise CDN 兜底")
     pixabay_key = ""
-    if use_pixabay:
+    pexels_key = ""
+    if use_images:
         pixabay_key = st.text_input(
-            "Pixabay API Key（备用）",
+            "Pixabay API Key（主图源）",
             value=os.getenv("PIXABAY_API_KEY", "46561407-37c6214d0e52dffc32a430eb3"),
             type="password",
-            placeholder="Placewise 失败时自动切换到 Pixabay",
+            placeholder="从 pixabay.com/api/docs 获取",
+        )
+        pexels_key = st.text_input(
+            "Pexels API Key（可选，补充图源）",
+            value=os.getenv("PEXELS_API_KEY", ""),
+            type="password",
+            placeholder="从 pexels.com/api 获取（可选）",
         )
 
     st.divider()
@@ -1033,18 +1040,20 @@ if generate_btn:
                 st.error(f"❌ 生成失败：{err}")
             st.stop()
 
-        if use_pixabay:
-            st.write("🖼️ 正在从图库获取配图（Placewise + Pixabay）...")
+        if use_images:
+            st.write("🖼️ 正在获取配图（Pixabay → Pexels → Placewise）...")
             scenario_terms = st.session_state["last_scenario"].get("pixabay_terms", [])
             ai_terms = result.get("image_search_terms", [])
             pixabay_images = fetch_images_for_article(
                 pixabay_key=pixabay_key,
+                pexels_key=pexels_key,
                 scenario_terms=scenario_terms,
                 ai_terms=ai_terms,
                 per_query=2,
             )
             st.session_state["last_pixabay"] = pixabay_images
-            st.write(f"✅ 获取 {len(pixabay_images)} 张配图")
+            sources = set(img.get("source", "") for img in pixabay_images)
+            st.write(f"✅ 获取 {len(pixabay_images)} 张配图（来源: {', '.join(sources) if sources else 'N/A'}）")
         else:
             st.session_state["last_pixabay"] = []
 
@@ -1069,6 +1078,10 @@ if generate_btn:
 # ══════════════════════════════════════════════════════════════════════════════
 # 输出展示
 # ══════════════════════════════════════════════════════════════════════════════
+if st.session_state.get("_pending_rerun"):
+    st.session_state["_pending_rerun"] = False
+    st.rerun()
+
 if "last_result" in st.session_state:
     result = st.session_state["last_result"]
 
@@ -1401,7 +1414,8 @@ if "last_result" in st.session_state:
                                 optimized = opt_inner.strip()
 
                         st.session_state["last_result"]["article"] = optimized
-                        st.rerun()
+                        st.session_state["_pending_rerun"] = True
+                        st.success("✅ SEO 优化完成！页面即将刷新显示新文章...")
                     except Exception as e:
                         st.error(f"优化失败：{e}")
 
@@ -1482,7 +1496,8 @@ if "last_result" in st.session_state:
                                 optimized = opt_inner.strip()
 
                         st.session_state["last_result"]["article"] = optimized
-                        st.rerun()
+                        st.session_state["_pending_rerun"] = True
+                        st.success("✅ GEO 优化完成！页面即将刷新显示新文章...")
                     except Exception as e:
                         st.error(f"GEO 优化失败：{e}")
 
@@ -1572,7 +1587,8 @@ AI 痕迹：
 
                     st.session_state["last_result"]["article"] = humanized
                     st.session_state["ai_detect_result"] = ""
-                    st.rerun()
+                    st.session_state["_pending_rerun"] = True
+                    st.success("✅ 人性化改写完成！页面即将刷新显示新文章...")
                 except Exception as e:
                     st.error(f"人性化改写失败：{e}")
 

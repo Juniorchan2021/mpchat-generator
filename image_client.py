@@ -1,52 +1,18 @@
 """
-MPChat v4.0 — Multi-source image client
-Primary: Placewise (aggregates Pixabay + Pexels + Unsplash, no API key)
-Fallback: Pixabay direct API
+MPChat v4.0.1 — Multi-source image client
+Tier 1: Pixabay (primary, proven, API search with metadata)
+Tier 2: Pexels (secondary, free 200 req/hr, proper search API)
+Tier 3: Placewise CDN (URL-based fallback for article body images, no API key)
 """
 
 import requests
 
-PLACEWISE_BASE = "https://placewise.io/api/v1"
 PIXABAY_API_URL = "https://pixabay.com/api/"
+PEXELS_API_URL = "https://api.pexels.com/v1/search"
+PLACEWISE_CDN = "https://img.placewise.io"
 
 
-# ── Placewise (primary) ─────────────────────────────────────────────────────
-
-def search_placewise(
-    query: str,
-    count: int = 4,
-    orientation: str = "landscape",
-) -> list[dict]:
-    """Search Placewise which aggregates Pixabay + Pexels + Unsplash."""
-    if not query or not query.strip():
-        return []
-    url = f"{PLACEWISE_BASE}/search"
-    params = {
-        "query": query.strip()[:100],
-        "per_page": min(count, 10),
-        "orientation": orientation,
-    }
-    try:
-        r = requests.get(url, params=params, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-    except Exception:
-        return []
-
-    results = []
-    for item in data.get("results", data.get("photos", data.get("hits", [])))[:count]:
-        results.append({
-            "url": item.get("url") or item.get("src", {}).get("large") or item.get("largeImageURL", ""),
-            "preview_url": item.get("thumbnail") or item.get("src", {}).get("medium") or item.get("webformatURL", ""),
-            "alt_text": query,
-            "photographer": item.get("photographer") or item.get("user") or "Unknown",
-            "page_url": item.get("source_url") or item.get("url") or "",
-            "source": item.get("source", "Placewise"),
-        })
-    return [r for r in results if r["url"]]
-
-
-# ── Pixabay (fallback) ──────────────────────────────────────────────────────
+# ── Tier 1: Pixabay (primary) ───────────────────────────────────────────────
 
 def search_pixabay(
     api_key: str,
@@ -55,7 +21,6 @@ def search_pixabay(
     orientation: str = "horizontal",
     min_width: int = 800,
 ) -> list[dict]:
-    """Direct Pixabay API search as fallback."""
     if not api_key or not api_key.strip() or not query:
         return []
     params = {
@@ -88,13 +53,74 @@ def search_pixabay(
     return [r for r in results if r["url"]]
 
 
+# ── Tier 2: Pexels (secondary) ──────────────────────────────────────────────
+
+def search_pexels(
+    api_key: str,
+    query: str,
+    count: int = 4,
+    orientation: str = "landscape",
+) -> list[dict]:
+    if not api_key or not api_key.strip() or not query:
+        return []
+    headers = {"Authorization": api_key.strip()}
+    params = {
+        "query": query[:100],
+        "per_page": min(count, 15),
+        "orientation": orientation,
+    }
+    try:
+        r = requests.get(PEXELS_API_URL, headers=headers, params=params, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+    except Exception:
+        return []
+
+    results = []
+    for photo in data.get("photos", [])[:count]:
+        src = photo.get("src", {})
+        results.append({
+            "url": src.get("large") or src.get("original", ""),
+            "preview_url": src.get("medium", ""),
+            "alt_text": photo.get("alt") or query,
+            "photographer": photo.get("photographer", "Unknown"),
+            "page_url": photo.get("url", ""),
+            "source": "Pexels",
+        })
+    return [r for r in results if r["url"]]
+
+
+# ── Tier 3: Placewise CDN (URL-based, no API key) ───────────────────────────
+
+def build_placewise_url(query: str, width: int = 800, height: int = 500) -> str:
+    """Build a Placewise CDN image URL from a semantic query."""
+    slug = query.strip().lower().replace(" ", "-")[:80]
+    return f"{PLACEWISE_CDN}/{width}x{height}-{slug}"
+
+
+def build_placewise_images(queries: list[str], count: int = 4) -> list[dict]:
+    """Generate Placewise CDN image dicts for article body insertion."""
+    results = []
+    for q in queries[:count]:
+        url = build_placewise_url(q)
+        results.append({
+            "url": url,
+            "preview_url": url,
+            "alt_text": q,
+            "photographer": "Placewise CDN",
+            "page_url": "https://placewise.io",
+            "source": "Placewise",
+            "query": q,
+        })
+    return results
+
+
 # ── Unified search ──────────────────────────────────────────────────────────
 
 def build_search_queries(
     scenario_terms: list[str] | None = None,
     ai_terms: list[str] | None = None,
 ) -> list[str]:
-    """Merge and deduplicate search queries from scenario and AI suggestions."""
     queries: list[str] = []
     seen = set()
     for src in (scenario_terms or [], ai_terms or []):
@@ -108,38 +134,45 @@ def build_search_queries(
 
 def fetch_images_for_article(
     pixabay_key: str = "",
+    pexels_key: str = "",
     scenario_terms: list[str] | None = None,
     ai_terms: list[str] | None = None,
     per_query: int = 2,
 ) -> list[dict]:
     """
-    High-level image fetcher.
-    Tries Placewise first (aggregates 3 sources), falls back to Pixabay.
+    High-level image fetcher with 3-tier fallback:
+    1. Pixabay (primary) — needs API key
+    2. Pexels (secondary) — needs API key
+    3. Placewise CDN (fallback) — no API key, URL-based
     """
     queries = build_search_queries(scenario_terms, ai_terms)
     if not queries:
         return []
 
     all_images: list[dict] = []
-    placewise_failed = False
 
-    for q in queries:
-        imgs = search_placewise(q, count=per_query)
-        if not imgs:
-            placewise_failed = True
-            break
-        for img in imgs:
-            img["query"] = q
-        all_images.extend(imgs)
-
-    if placewise_failed and pixabay_key:
-        all_images = []
+    # Tier 1: Pixabay
+    if pixabay_key:
         for q in queries:
             imgs = search_pixabay(pixabay_key, q, count=per_query)
             for img in imgs:
                 img["query"] = q
             all_images.extend(imgs)
 
+    # Tier 2: Pexels (fill remaining slots)
+    if len(all_images) < 4 and pexels_key:
+        remaining = max(1, per_query - (len(all_images) // max(len(queries), 1)))
+        for q in queries:
+            imgs = search_pexels(pexels_key, q, count=remaining)
+            for img in imgs:
+                img["query"] = q
+            all_images.extend(imgs)
+
+    # Tier 3: Placewise CDN (if both APIs failed)
+    if not all_images:
+        all_images = build_placewise_images(queries, count=4)
+
+    # Deduplicate
     seen_urls = set()
     unique: list[dict] = []
     for img in all_images:
