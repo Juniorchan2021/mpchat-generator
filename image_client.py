@@ -1,10 +1,14 @@
 """
-MPChat v4.0.1 — Multi-source image client
-Tier 1: Pixabay (primary, proven, API search with metadata)
-Tier 2: Pexels (secondary, free 200 req/hr, proper search API)
-Tier 3: Placewise CDN (URL-based fallback for article body images, no API key)
+MPChat v4.1 — Multi-source image client
+Tier 1: Pixabay (primary, API search with random page offset)
+Tier 2: Pexels (secondary, free 200 req/hr, random page offset)
+Tier 3: Placewise CDN (URL-based fallback, no API key)
+
+Randomization: each call picks a random page (1-5) so repeated
+generation with the same scenario returns different images.
 """
 
+import random
 import requests
 
 PIXABAY_API_URL = "https://pixabay.com/api/"
@@ -23,6 +27,7 @@ def search_pixabay(
 ) -> list[dict]:
     if not api_key or not api_key.strip() or not query:
         return []
+    page = random.randint(1, 5)
     params = {
         "key": api_key.strip(),
         "q": query[:100],
@@ -30,7 +35,8 @@ def search_pixabay(
         "image_type": "photo",
         "orientation": orientation,
         "min_width": min_width,
-        "per_page": min(count, 20),
+        "per_page": min(count + 4, 20),
+        "page": page,
         "safesearch": "true",
     }
     try:
@@ -40,8 +46,12 @@ def search_pixabay(
     except Exception:
         return []
 
+    hits = data.get("hits", [])
+    if hits:
+        random.shuffle(hits)
+
     results = []
-    for hit in data.get("hits", [])[:count]:
+    for hit in hits[:count]:
         results.append({
             "url": hit.get("largeImageURL") or hit.get("webformatURL", ""),
             "preview_url": hit.get("webformatURL", ""),
@@ -63,10 +73,12 @@ def search_pexels(
 ) -> list[dict]:
     if not api_key or not api_key.strip() or not query:
         return []
+    page = random.randint(1, 5)
     headers = {"Authorization": api_key.strip()}
     params = {
         "query": query[:100],
-        "per_page": min(count, 15),
+        "per_page": min(count + 4, 15),
+        "page": page,
         "orientation": orientation,
     }
     try:
@@ -76,8 +88,12 @@ def search_pexels(
     except Exception:
         return []
 
+    photos = data.get("photos", [])
+    if photos:
+        random.shuffle(photos)
+
     results = []
-    for photo in data.get("photos", [])[:count]:
+    for photo in photos[:count]:
         src = photo.get("src", {})
         results.append({
             "url": src.get("large") or src.get("original", ""),
@@ -93,13 +109,11 @@ def search_pexels(
 # ── Tier 3: Placewise CDN (URL-based, no API key) ───────────────────────────
 
 def build_placewise_url(query: str, width: int = 800, height: int = 500) -> str:
-    """Build a Placewise CDN image URL from a semantic query."""
     slug = query.strip().lower().replace(" ", "-")[:80]
     return f"{PLACEWISE_CDN}/{width}x{height}-{slug}"
 
 
 def build_placewise_images(queries: list[str], count: int = 4) -> list[dict]:
-    """Generate Placewise CDN image dicts for article body insertion."""
     results = []
     for q in queries[:count]:
         url = build_placewise_url(q)
@@ -118,18 +132,33 @@ def build_placewise_images(queries: list[str], count: int = 4) -> list[dict]:
 # ── Unified search ──────────────────────────────────────────────────────────
 
 def build_search_queries(
-    scenario_terms: list[str] | None = None,
     ai_terms: list[str] | None = None,
+    scenario_terms: list[str] | None = None,
+    article_title: str = "",
 ) -> list[str]:
+    """Build search queries, prioritizing AI-generated terms (article-specific)
+    over static scenario terms. Optionally extract keywords from the title."""
     queries: list[str] = []
-    seen = set()
-    for src in (scenario_terms or [], ai_terms or []):
-        for term in src:
-            key = term.strip().lower()
-            if key and key not in seen:
-                seen.add(key)
-                queries.append(term.strip())
-    return queries[:5]
+    seen: set[str] = set()
+
+    def _add(term: str):
+        key = term.strip().lower()
+        if key and key not in seen and len(key) > 2:
+            seen.add(key)
+            queries.append(term.strip())
+
+    for term in (ai_terms or []):
+        _add(term)
+
+    if article_title:
+        title_words = [w for w in article_title.split() if len(w) > 3]
+        if len(title_words) >= 2:
+            _add(" ".join(title_words[:4]))
+
+    for term in (scenario_terms or []):
+        _add(term)
+
+    return queries[:6]
 
 
 def fetch_images_for_article(
@@ -137,15 +166,18 @@ def fetch_images_for_article(
     pexels_key: str = "",
     scenario_terms: list[str] | None = None,
     ai_terms: list[str] | None = None,
+    article_title: str = "",
     per_query: int = 2,
 ) -> list[dict]:
     """
-    High-level image fetcher with 3-tier fallback:
-    1. Pixabay (primary) — needs API key
-    2. Pexels (secondary) — needs API key
-    3. Placewise CDN (fallback) — no API key, URL-based
+    High-level image fetcher with 3-tier fallback and randomization.
+    Each call returns different images even for the same scenario.
     """
-    queries = build_search_queries(scenario_terms, ai_terms)
+    queries = build_search_queries(
+        ai_terms=ai_terms,
+        scenario_terms=scenario_terms,
+        article_title=article_title,
+    )
     if not queries:
         return []
 
@@ -161,8 +193,10 @@ def fetch_images_for_article(
 
     # Tier 2: Pexels (fill remaining slots)
     if len(all_images) < 4 and pexels_key:
-        remaining = max(1, per_query - (len(all_images) // max(len(queries), 1)))
+        remaining = max(1, per_query)
         for q in queries:
+            if len(all_images) >= 8:
+                break
             imgs = search_pexels(pexels_key, q, count=remaining)
             for img in imgs:
                 img["query"] = q
@@ -172,11 +206,14 @@ def fetch_images_for_article(
     if not all_images:
         all_images = build_placewise_images(queries, count=4)
 
-    # Deduplicate
-    seen_urls = set()
+    # Deduplicate by URL
+    seen_urls: set[str] = set()
     unique: list[dict] = []
     for img in all_images:
         if img["url"] not in seen_urls:
             seen_urls.add(img["url"])
             unique.append(img)
+
+    # Shuffle final results for variety
+    random.shuffle(unique)
     return unique[:8]

@@ -346,8 +346,12 @@ def build_system_prompt(language: str, style_instruction: str,
 - 禁止出现品牌 Logo 或真实人脸描写
 
 【image_search_terms 规范】
-- 提供 3-5 个英文关键词，用于在 Pixabay 搜索配图
-- 关键词要具体、视觉化（如 "digital payment smartphone" 而非 "crypto"）
+- 提供 5 个英文搜索短语（2-4 个词），用于在 Pixabay / Pexels 搜索配图
+- 每个短语必须与文章具体内容相关，而非泛泛的通用词
+- 5 个短语要覆盖不同的视觉场景（如支付场景、生活方式、科技、人物、城市）
+- 好的例子："woman paying coffee smartphone", "crypto wallet dashboard screen", "bangkok street food night"
+- 差的例子："crypto", "finance", "technology"（太宽泛，配图不相关）
+- 每次生成必须给出不同的搜索词组合，避免重复
 """ + (_geo_prompt_section() if geo_mode else "")
 
 
@@ -1168,11 +1172,13 @@ if generate_btn:
             st.write("🖼️ 正在获取配图（Pixabay → Pexels → Placewise）...")
             scenario_terms = st.session_state["last_scenario"].get("pixabay_terms", [])
             ai_terms = result.get("image_search_terms", [])
+            art_title = result.get("seo_title", "")
             pixabay_images = fetch_images_for_article(
                 pixabay_key=pixabay_key,
                 pexels_key=pexels_key,
                 scenario_terms=scenario_terms,
                 ai_terms=ai_terms,
+                article_title=art_title,
                 per_query=2,
             )
             st.session_state["last_pixabay"] = pixabay_images
