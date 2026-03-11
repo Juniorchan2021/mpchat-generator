@@ -1280,7 +1280,7 @@ def _ext_run_optimize(prompt: str, system_msg: str, spinner_text: str,
             }
             st.session_state["ext_opt_type"] = opt_type
             st.session_state["ext_detect_result"] = ""
-            st.success(f"{opt_type}完成！请查看下方的修改说明和优化后文章。")
+            st.rerun()
         except Exception as e:
             st.error(f"{opt_type}失败：{e}")
 
