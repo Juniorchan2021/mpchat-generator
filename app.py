@@ -792,7 +792,7 @@ with st.sidebar:
         geo_mode = opt_mode == "SEO + GEO 双优化"
 
     # ── 🖼️ 多图库配图 ──────────────────────────────────────────────────────
-    with st.expander("🖼️ 多图库配图", expanded=False):
+    with st.expander("🖼️ 多图库配图", expanded=True):
         use_images = st.toggle("获取配图（Pixabay + Pexels + Placewise）", value=True,
                                help="Pixabay 为主图源，Pexels 补充，Placewise CDN 兜底")
         pixabay_key = ""
@@ -817,14 +817,14 @@ with st.sidebar:
             )
 
     # ── 🔍 SERP 分析 ─────────────────────────────────────────────────────────
-    with st.expander("🔍 SERP 分析", expanded=False):
+    with st.expander("🔍 SERP 分析", expanded=True):
         use_serp = st.toggle("生成前分析 Google Top 10", value=False,
                              help="爬取目标关键词的 Google 排名前 10 页面，提取内容策略注入 AI Prompt")
         if use_serp:
             st.caption("✅ 已开启 · 生成时自动分析竞品 SERP（约多 10 秒）")
 
     # ── 🌍 网络知识库 ────────────────────────────────────────────────────────
-    with st.expander("🌍 网络知识库", expanded=False):
+    with st.expander("🌍 网络知识库", expanded=True):
         use_web = st.toggle("抓取全网 MPChat 资料", value=True,
                             help="官网 + Medium + Twitter + Google + 百度（点击生成时抓取，缓存 2 小时）")
         if use_web:
