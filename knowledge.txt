@@ -8,7 +8,7 @@
 
 作为综合性的基础设施平台，MPChat 整合了无缝的稳定币支付、安全数据传输以及去中心化金融接入。通过将企业级加密技术与严格的监管架构相结合，MPChat 为全球数字资产管理和即时清算提供了统一的解决方案。
 
-**Official Website:** mpchat.io
+**Official Website:** mp.net
 **App Download:** Available on App Store and Google Play
 **Tagline:** Live with Crypto | 拥抱加密生活
 
@@ -146,5 +146,5 @@
 
 - **App Store:** 搜索 "MPChat" 立即下载
 - **Google Play:** 搜索 "MPChat" 立即下载
-- **官网:** mpchat.io
+- **官网:** mp.net
 - **注册即送：** 新用户注册赠送专属福利，申请 MP Card 享低手续费优惠

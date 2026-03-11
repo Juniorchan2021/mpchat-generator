@@ -241,7 +241,7 @@ def build_dual_optimize_prompt(
 【SEO 优化要求（必须满足）】
 1. 1 个 H1（#）+ 至少 3 个 H2（##）
 2. 关键词密度 1-2%（关键词：{keywords if keywords else 'MPChat, 加密支付'}）
-3. 结尾有明确 CTA（引导下载 MPChat 或申请 MP Card）
+3. 结尾有明确 CTA（引导访问 mp.net 下载 MPChat 或申请 MP Card）
 4. 总长度 800-1200 字，每段 ≤150 字
 
 【GEO 优化要求（必须满足）】
@@ -314,7 +314,7 @@ A. SEO 硬性要求（结构层，不可删减）
 ══════════════════════════════════════════
 1. 1 个 H1（#）+ 至少 4 个 H2（##），标题含关键词
 2. 关键词密度 1-2%（关键词：{kw}）
-3. 结尾有明确 CTA（引导下载 MPChat / 申请 MP Card）
+3. 结尾有明确 CTA（引导访问 mp.net 下载 MPChat / 申请 MP Card）
 4. 总长度 800-1200 字
 5. 每段 ≤ 150 字
 

@@ -315,7 +315,7 @@ def build_system_prompt(language: str, style_instruction: str,
 - 自然植入用户指定的 SEO 关键词，不堆砌，保持阅读流畅
 - 每段不超过 150 字，适合移动端阅读
 - 文章总长度：800-1200 字（中文）/ 600-900 词（英文）
-- 结尾必须有清晰有力的 CTA（Call to Action），引导用户下载 MPChat 或申请 MP Card
+- 结尾必须有清晰有力的 CTA（Call to Action），引导用户访问 mp.net 下载 MPChat 或申请 MP Card（官网是 mp.net，不是 mpchat.io）
 
 【输出格式要求（严格遵守 JSON 格式）】
 请以合法的 JSON 格式输出，结构如下：
@@ -1503,7 +1503,7 @@ if "last_result" in st.session_state:
 【SEO 优化要求】
 - 确保有 1 个 H1（#）和至少 3 个 H2（##）
 - 自然增加关键词密度到 1-2%（关键词：{kw_for_stats}）
-- 结尾必须有明确的 CTA（引导下载 MPChat 或申请 MP Card）
+- 结尾必须有明确的 CTA（引导访问 mp.net 下载 MPChat 或申请 MP Card）
 - 文章总长度 800-1200 字
 - 每段不超过 150 字
 
@@ -1759,7 +1759,7 @@ AI 痕迹：
 2. 关键词自然分布：{kw_human}
 3. 所有数据引用和统计数字（如「据...报告，...」格式）
 4. FAQ 段落（## 常见问题）及其全部 Q&A 对
-5. CTA 段落（引导下载 MPChat 或申请 MP Card）
+5. CTA 段落（引导访问 mp.net 下载 MPChat 或申请 MP Card）
 6. 产品实体名称 MPChat / MP Card / MP Wallet / mp.net
 7. 权威来源引用（Chainalysis、CoinDesk 等）
 
