@@ -556,10 +556,17 @@ html, body, [class*="css"] {
     color: #EDEDED;
 }
 
-/* Hide Streamlit default elements */
+/* Hide Streamlit default elements but keep sidebar toggle */
 #MainMenu {visibility: hidden;}
-header {visibility: hidden;}
 footer {visibility: hidden;}
+header[data-testid="stHeader"] {
+    background: transparent !important;
+    backdrop-filter: none !important;
+}
+[data-testid="collapsedControl"] {
+    visibility: visible !important;
+    color: #A1A1AA !important;
+}
 
 /* Linear/Stripe Dark Theme Overrides */
 .stApp {
@@ -658,10 +665,16 @@ div[data-testid="stVerticalBlock"] > div[style*="border"]:hover {
 [data-testid="stSidebar"] { 
     background-color: #121217 !important; 
     border-right: 1px solid rgba(255,255,255,0.05) !important;
+    min-width: 320px !important;
 }
 [data-testid="stSidebar"] .stMarkdown h3 {
     color: #F4F4F5; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
     margin-bottom: 16px;
+}
+[data-testid="stSidebar"] .stExpander {
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 10px !important;
+    margin-bottom: 8px !important;
 }
 
 /* Expanders */
