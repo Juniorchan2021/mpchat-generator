@@ -7,6 +7,7 @@ import os
 import json
 import time
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
@@ -173,7 +174,7 @@ def _fetch_nitter_twitter(max_chars: int = 2000) -> str:
     return "[抓取失败: Twitter/X 暂不可直接抓取]"
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=7200, show_spinner=False)
 def fetch_web_knowledge() -> tuple[str, list[dict]]:
     tasks = [
         ("🌐 官网 mp.net", lambda: _fetch_html("https://mp.net/", 3000)),
@@ -191,16 +192,35 @@ def fetch_web_knowledge() -> tuple[str, list[dict]]:
              "MPChat-Announces-Binance-Pay-Integration-Unlocking-a-New-Era-of-"
              "Seamless-Crypto-Top-Ups-for-Global-Users.html", 2500)),
     ]
+
+    results_map: dict[str, dict] = {}
+    texts_map: dict[str, str] = {}
+
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        future_to_label = {}
+        for label, fn in tasks:
+            future_to_label[pool.submit(fn)] = (label, time.time())
+
+        for future in as_completed(future_to_label):
+            label, t0 = future_to_label[future]
+            elapsed = round(time.time() - t0, 1)
+            try:
+                text = future.result()
+            except Exception as e:
+                text = f"[抓取失败: {e}]"
+            ok = not text.startswith("[抓取失败")
+            results_map[label] = {"label": label, "ok": ok, "elapsed": elapsed}
+            if ok and len(text.strip()) > 50:
+                texts_map[label] = text
+
     results = []
     all_text_parts = []
-    for label, fn in tasks:
-        t0 = time.time()
-        text = fn()
-        elapsed = round(time.time() - t0, 1)
-        ok = not text.startswith("[抓取失败")
-        results.append({"label": label, "ok": ok, "elapsed": elapsed})
-        if ok and len(text.strip()) > 50:
-            all_text_parts.append(f"### 来源：{label}\n{text}")
+    for label, _ in tasks:
+        if label in results_map:
+            results.append(results_map[label])
+        if label in texts_map:
+            all_text_parts.append(f"### 来源：{label}\n{texts_map[label]}")
+
     combined = "\n\n---\n\n".join(all_text_parts)
     return combined, results
 
@@ -594,29 +614,9 @@ with st.sidebar:
     # ── 🌍 网络知识库 ────────────────────────────────────────────────────────
     st.markdown("### 🌍 网络知识库")
     use_web = st.toggle("抓取全网 MPChat 资料", value=True,
-                        help="官网 + Medium + Twitter + Google + 百度（缓存 1 小时）")
+                        help="官网 + Medium + Twitter + Google + 百度（点击生成时抓取，缓存 2 小时）")
     if use_web:
-        with st.spinner("🌐 正在抓取全网资料..."):
-            web_content, web_status = fetch_web_knowledge()
-        ok_count = sum(1 for s in web_status if s["ok"])
-        total = len(web_status)
-        color = "#00c853" if ok_count >= total * 0.6 else "#f59e0b"
-        st.markdown(
-            f"<div style='font-size:0.8rem;color:{color};'>"
-            f"{'✅' if ok_count >= total * 0.6 else '⚠️'} "
-            f"成功 {ok_count} / {total} 个来源</div>",
-            unsafe_allow_html=True,
-        )
-        with st.expander(f"查看抓取详情（{ok_count}/{total}）"):
-            for s in web_status:
-                icon = "✅" if s["ok"] else "❌"
-                st.markdown(
-                    f"<div style='font-size:0.73rem;color:#9ca3af;'>"
-                    f"{icon} {s['label']} ({s['elapsed']}s)</div>",
-                    unsafe_allow_html=True,
-                )
-    else:
-        web_content = ""
+        st.caption("✅ 已开启 · 点击「生成」时自动并行抓取 10 个来源")
 
     st.divider()
     st.markdown(
@@ -657,6 +657,21 @@ if generate_btn:
         st.warning("⚠️ 请至少选择一个主打卖点。")
         st.stop()
 
+    web_content = ""
+    web_status = []
+    if use_web:
+        with st.spinner("🌐 正在并行抓取全网资料（约 3-5 秒）..."):
+            web_content, web_status = fetch_web_knowledge()
+        ok_count = sum(1 for s in web_status if s["ok"])
+        total = len(web_status)
+        color = "#00c853" if ok_count >= total * 0.6 else "#f59e0b"
+        st.markdown(
+            f"<div style='font-size:0.8rem;color:{color};'>"
+            f"{'✅' if ok_count >= total * 0.6 else '⚠️'} "
+            f"网络抓取完成：成功 {ok_count} / {total} 个来源</div>",
+            unsafe_allow_html=True,
+        )
+
     with st.spinner("🤖 AI 正在撰写中，请稍候（约 15-30 秒）..."):
         try:
             client = get_client(api_key_input, base_url_input)
@@ -670,7 +685,7 @@ if generate_btn:
                 style_name=selected_style_key,
                 style_instruction=style_obj["instruction"],
                 keywords=keywords,
-                web_content=web_content if use_web else "",
+                web_content=web_content,
             )
             st.session_state["last_result"] = result
             st.session_state["last_language"] = language
