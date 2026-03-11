@@ -1,13 +1,17 @@
 """
-MPChat v4.0 — Lightweight SERP Analyzer
+MPChat v4.1 — Lightweight SERP Analyzer
 Scrape Google top 10 results for target keywords, extract patterns,
 and generate content strategy recommendations for LLM injection.
 """
 
+import logging
 import re
+import time
 import requests
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+logger = logging.getLogger(__name__)
 
 
 HEADERS = {
@@ -35,7 +39,8 @@ def search_google(query: str, num_results: int = 10) -> list[dict]:
             timeout=15,
         )
         r.raise_for_status()
-    except Exception:
+    except Exception as e:
+        logger.warning("Google search failed for '%s': %s", query, e)
         return []
 
     soup = BeautifulSoup(r.text, "html.parser")
@@ -61,6 +66,7 @@ def search_google(query: str, num_results: int = 10) -> list[dict]:
 
 def fetch_page_headings(url: str) -> list[str]:
     """Fetch H1/H2 headings from a URL."""
+    time.sleep(1)
     try:
         r = requests.get(url, headers=HEADERS, timeout=10)
         r.raise_for_status()
@@ -71,7 +77,8 @@ def fetch_page_headings(url: str) -> list[str]:
             if text:
                 headings.append(f"{tag.name.upper()}: {text}")
         return headings[:15]
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to fetch headings from %s: %s", url, e)
         return []
 
 

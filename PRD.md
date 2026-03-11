@@ -44,6 +44,8 @@ SEO 关键词(17+)   知识库            正文 + 文内图       知乎/公众
                                     + AI 检测
                                     Module E
                                     多平台分发
+                                    Module F
+                                    外部文章优化检测
 ```
 
 ---
@@ -490,3 +492,54 @@ header { background: transparent; }         /* 顶栏透明化 */
 **修复方案：** 见 3.11 说明。
 
 **影响文件：** `knowledge.txt`、`app.py`、`geo_tools.py`
+
+---
+
+## 12. Module F — 外部文章优化检测 (v4.1 新增)
+
+### 12.1 功能背景
+
+MPChat 团队除了使用本工具生成软文外，还在 mp.net 官方博客和其他渠道发布人工撰写的文章。这些外部文章同样需要 SEO/GEO 优化和 AI 检测，但此前所有优化工具均绑定在生成流程中（必须先用本工具生成文章才能使用评分和优化功能）。
+
+### 12.2 功能定位
+
+Module F 是一个**独立于生成流程**的文章优化检测工具，用户可将任意来源的文章粘贴进来，使用完整的 SEO/GEO/AI 检测/人性化/三合一优化工具链。
+
+### 12.3 UI 设计
+
+Module F 位于批量生成模块之后、单篇生成输出之前，作为 `st.expander` 始终可见（`expanded=False`）。
+
+**输入区域：**
+- 文章内容文本框（`st.text_area`，Markdown 格式，300px 高度）
+- 目标关键词输入（`st.text_input`，逗号分隔，可选）
+- 「开始分析」按钮和「清空」按钮
+
+**分析结果（4 个 Tab）：**
+
+| Tab | 功能 | 对应工具函数 |
+|-----|------|------------|
+| 📊 SEO 评分 | 字数/阅读时间/H2数/评分环 + 关键词密度 + 一键 SEO 优化 | `reading_stats()` |
+| 🧠 GEO 评分 | 评分环 + 6 项详细指标表 + 问题/建议 + 一键 GEO 优化 | `geo_score()` |
+| ⚡ 双优化 | SEO + GEO 双评分环 + 一键联合优化 | `build_dual_optimize_prompt()` |
+| 🤖 AI 检测 | AI 痕迹检测 + 人性化改写 + 三合一优化 | `build_triple_optimize_prompt()` |
+
+### 12.4 状态管理
+
+Module F 使用独立的 session state key，避免与生成流程冲突：
+
+| Key | 用途 |
+|-----|------|
+| `ext_article` | 当前外部文章内容（优化后自动更新） |
+| `ext_keywords` | 当前目标关键词 |
+| `ext_detect_result` | AI 检测结果缓存 |
+
+### 12.5 与 Module D 的差异
+
+- **无 Schema/内链 Tab**：外部文章不需要 mp.net 特定的 JSON-LD Schema 或内部链接建议
+- **独立状态**：所有按钮 key 加 `ext_` 前缀，状态互不影响
+- **FAQ 默认为空**：外部文章无法自动提取 FAQ pairs，`geo_score()` 传入空列表
+- **通用 CTA**：SEO 优化 prompt 使用 `mp.net` 作为 CTA 目标，但不强制 MPChat 产品线
+
+### 12.6 影响文件
+
+- `app.py`：新增 Module F section（~250 行）

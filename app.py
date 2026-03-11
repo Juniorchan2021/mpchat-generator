@@ -1,5 +1,5 @@
 """
-MPChat 智能软文生成器 v4.0
+MPChat 智能软文生成器 v4.1
 37+ 细分场景 · 25+ 卖点 · 7 种文风 · 16 种语言 · 多图库 · GEO + SEO 双优化
 流式进度 · 批量生成 · 历史记录 · 文内配图 · A/B 标题 · 竞品对比
 """
@@ -35,7 +35,7 @@ from seo_tools import (
     generate_internal_links,
     reading_stats,
 )
-from geo_tools import geo_score, generate_faq_schema, build_geo_optimize_prompt, build_dual_optimize_prompt
+from geo_tools import geo_score, generate_faq_schema, build_geo_optimize_prompt, build_dual_optimize_prompt, build_triple_optimize_prompt
 from publishers import (
     publish_to_devto,
     publish_to_hashnode,
@@ -543,7 +543,7 @@ def insert_images_into_article(article_text: str, images: list[dict],
 # Streamlit 页面配置 + 全局样式
 # ══════════════════════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="MPChat 智能软文生成器 v4.0",
+    page_title="MPChat 智能软文生成器 v4.1",
     page_icon="🌿",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -764,7 +764,7 @@ st.markdown("""
   <div>
     <h1>MPChat 智能软文生成器</h1>
     <p>37+ 场景 · 25+ 卖点 · 16 种语言 · 多图库 · GEO + SEO 双优化 · 多平台分发</p>
-    <span class="mp-badge">v4.0 — Live with Crypto</span>
+    <span class="mp-badge">v4.1 — Live with Crypto</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -837,9 +837,14 @@ with st.sidebar:
     pixabay_key = ""
     pexels_key = ""
     if use_images:
+        def _get_pixabay_key():
+            if "PIXABAY_API_KEY" in st.secrets:
+                return st.secrets["PIXABAY_API_KEY"]
+            return os.getenv("PIXABAY_API_KEY", "")
+
         pixabay_key = st.text_input(
             "Pixabay API Key",
-            value=os.getenv("PIXABAY_API_KEY", "46561407-37c6214d0e52dffc32a430eb3"),
+            value=_get_pixabay_key(),
             type="password",
             placeholder="从 pixabay.com/api/docs 获取",
         )
@@ -882,7 +887,7 @@ with st.sidebar:
     st.markdown(
         '<div class="sidebar-footer">'
         '<img src="https://mp.net/Logo.png" style="height:16px;width:auto;opacity:0.4;margin-bottom:4px;" /><br/>'
-        'MPChat Generator v4.0<br/>Live with Crypto</div>',
+        'MPChat Generator v4.1<br/>Live with Crypto</div>',
         unsafe_allow_html=True,
     )
 
@@ -1049,12 +1054,23 @@ with st.expander("📦 批量生成模式", expanded=False):
                             web_content=bweb,
                             geo_mode=geo_mode,
                         )
+                        b_images = []
+                        if use_images and br.get("article"):
+                            st.write(f"🖼️ [{bi + 1}] 获取配图...")
+                            b_images = fetch_images_for_article(
+                                pixabay_key=pixabay_key,
+                                pexels_key=pexels_key,
+                                scenario_terms=bsc.get("pixabay_terms", []),
+                                ai_terms=br.get("image_search_terms", []),
+                                article_title=br.get("seo_title", ""),
+                                per_query=2,
+                            )
                         batch_results.append(
-                            {"scenario": bsc, "result": br, "ok": True}
+                            {"scenario": bsc, "result": br, "images": b_images, "ok": True}
                         )
                     except Exception as be:
                         batch_results.append(
-                            {"scenario": bsc, "error": str(be), "ok": False}
+                            {"scenario": bsc, "error": str(be), "images": [], "ok": False}
                         )
                 ok_cnt = sum(1 for x in batch_results if x["ok"])
                 bstatus.update(
@@ -1070,6 +1086,12 @@ with st.expander("📦 批量生成模式", expanded=False):
                 btitle = br["result"].get("seo_title", br["scenario"]["label"])
                 with st.expander(f"✅ {btitle}", expanded=False):
                     st.markdown(br["result"].get("article", "")[:800] + "...")
+                    b_imgs = br.get("images", [])
+                    if b_imgs:
+                        img_cols = st.columns(min(len(b_imgs), 3))
+                        for idx, img in enumerate(b_imgs[:3]):
+                            with img_cols[idx]:
+                                st.image(img["url"], caption=img.get("alt", ""), use_container_width=True)
             else:
                 st.error(f"❌ {br['scenario']['label']}: {br['error']}")
         zip_buf = io.BytesIO()
@@ -1077,11 +1099,18 @@ with st.expander("📦 批量生成模式", expanded=False):
             for br in bresults:
                 if br["ok"]:
                     bslug = br["result"].get("slug_suggestion", "article")
+                    b_imgs = br.get("images", [])
+                    img_section = ""
+                    if b_imgs:
+                        img_section = "\n\n## Images\n\n" + "\n".join(
+                            f"![{img.get('alt', '')}]({img['url']})" for img in b_imgs
+                        )
                     bcontent = (
                         f"# {br['result'].get('seo_title', '')}\n\n"
                         f"> {br['result'].get('meta_description', '')}"
                         f"\n\n---\n\n"
                         f"{br['result'].get('article', '')}"
+                        f"{img_section}"
                     )
                     zf.writestr(f"{bslug}.md", bcontent.encode("utf-8"))
         st.download_button(
@@ -1089,6 +1118,406 @@ with st.expander("📦 批量生成模式", expanded=False):
             zip_buf.getvalue(), "mpchat-batch.zip", "application/zip",
             use_container_width=True, key="batch_download",
         )
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 📝 模块 F — 外部文章优化检测
+# ══════════════════════════════════════════════════════════════════════════════
+with st.expander("📝 外部文章优化检测（粘贴已有文章进行 SEO / GEO / AI 检测）", expanded=False):
+    st.caption("将官方博客或其他渠道的文章粘贴到此处，即可使用完整的优化检测工具链")
+
+    ext_article_input = st.text_area(
+        "粘贴文章内容（Markdown 格式）",
+        value=st.session_state.get("ext_article", ""),
+        height=300,
+        placeholder="将文章全文粘贴到这里...",
+        key="ext_article_area",
+    )
+    ext_kw_input = st.text_input(
+        "目标关键词（可选，逗号分隔）",
+        value=st.session_state.get("ext_keywords", ""),
+        placeholder="例如：MPChat, crypto payment, MP Card",
+        key="ext_kw_input",
+    )
+
+    ext_col1, ext_col2 = st.columns([1, 1])
+    with ext_col1:
+        ext_analyze_btn = st.button(
+            "🔍 开始分析", use_container_width=True, key="ext_analyze_btn",
+            disabled=not ext_article_input.strip(),
+        )
+    with ext_col2:
+        ext_clear_btn = st.button(
+            "🗑️ 清空", use_container_width=True, key="ext_clear_btn",
+        )
+
+    if ext_analyze_btn and ext_article_input.strip():
+        st.session_state["ext_article"] = ext_article_input.strip()
+        st.session_state["ext_keywords"] = ext_kw_input.strip()
+        st.session_state["ext_detect_result"] = ""
+
+    if ext_clear_btn:
+        st.session_state["ext_article"] = ""
+        st.session_state["ext_keywords"] = ""
+        st.session_state["ext_detect_result"] = ""
+
+    def _strip_code_fences(text: str) -> str:
+        """Remove wrapping ```markdown ... ``` fences from LLM output."""
+        if text.startswith("```"):
+            lines = text.split("\n")
+            inner = "\n".join(lines[1:])
+            if "```" in inner:
+                return inner[:inner.rfind("```")].strip()
+            return inner.strip()
+        return text
+
+    if st.session_state.get("ext_article"):
+        ext_art = st.session_state["ext_article"]
+        ext_kw = st.session_state.get("ext_keywords", "")
+
+        st.divider()
+
+        ext_tab_seo, ext_tab_geo, ext_tab_dual, ext_tab_ai = st.tabs(
+            ["📊 SEO 评分", "🧠 GEO 评分", "⚡ 双优化", "🤖 AI 检测"]
+        )
+
+        # ── SEO 评分 Tab ─────────────────────────────────────────
+        with ext_tab_seo:
+            ext_stats = reading_stats(ext_art, ext_kw)
+            ext_seo_score = ext_stats["structure_score"]
+            ext_seo_color = "#00c853" if ext_seo_score >= 80 else (
+                "#fbbf24" if ext_seo_score >= 50 else "#f87171"
+            )
+
+            em1, em2, em3, em4 = st.columns(4)
+            with em1:
+                st.metric("总字数", f"{ext_stats['word_count']}")
+            with em2:
+                st.metric("阅读时间", f"{ext_stats['reading_time_min']} 分钟")
+            with em3:
+                st.metric("H2 段落数", f"{ext_stats['h2_count']}")
+            with em4:
+                st.markdown(
+                    f"<div style='text-align:center;'>"
+                    f"<div class='score-ring' style='border:3px solid {ext_seo_color};color:{ext_seo_color};'>"
+                    f"{ext_seo_score}</div>"
+                    f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>SEO 评分</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+            st.markdown(f"**CTA 检测：** {'✅ 包含 CTA' if ext_stats['has_cta'] else '❌ 缺少 CTA'}")
+
+            if ext_stats["keyword_density"]:
+                st.markdown("**关键词密度分析：**")
+                for kw, info in ext_stats["keyword_density"].items():
+                    st.markdown(f"- `{kw}` — 出现 {info['count']} 次，密度 {info['density_pct']}%")
+
+            if ext_seo_score < 90:
+                st.divider()
+                st.markdown(f"**当前评分 {ext_seo_score}/100，建议优化到 90+**")
+                if st.button("🚀 一键 SEO 优化到 90+", use_container_width=True, key="ext_seo_opt_btn"):
+                    ext_issues = []
+                    if ext_stats["h1_count"] < 1:
+                        ext_issues.append("缺少 H1 标题（用 # 开头）")
+                    if ext_stats["h2_count"] < 2:
+                        ext_issues.append(f"H2 段落不足（当前 {ext_stats['h2_count']} 个，建议至少 3 个）")
+                    if not ext_stats["has_cta"]:
+                        ext_issues.append("缺少 CTA（如「立即下载」「免费注册」）")
+                    if ext_stats["word_count"] < 600:
+                        ext_issues.append(f"字数偏少（当前 {ext_stats['word_count']}，建议 800-1200）")
+                    if ext_stats["keyword_density"]:
+                        low_kw = [k for k, v in ext_stats["keyword_density"].items() if v["count"] < 2]
+                        if low_kw:
+                            ext_issues.append(f"关键词出现次数不足：{', '.join(low_kw)}")
+
+                    ext_seo_prompt = f"""请优化以下文章的 SEO 表现，目标评分 90-100 分。
+
+【当前问题】
+{chr(10).join(f'- {iss}' for iss in ext_issues) if ext_issues else '- 整体结构需要优化'}
+
+【SEO 优化要求】
+- 确保有 1 个 H1（#）和至少 3 个 H2（##）
+- 自然增加关键词密度到 1-2%（关键词：{ext_kw}）
+- 结尾必须有明确的 CTA（引导访问 mp.net）
+- 文章总长度 800-1200 字
+- 每段不超过 150 字
+
+【原文】
+{ext_art}
+
+请直接输出优化后的完整文章（Markdown 格式），不要输出 JSON，不要解释修改内容。"""
+
+                    with st.spinner("🤖 正在 SEO 优化中..."):
+                        try:
+                            opt_c = get_client(api_key_input, base_url_input)
+                            opt_r = opt_c.chat.completions.create(
+                                model=model_input.strip() if model_input else "gemini-2.5-flash",
+                                messages=[
+                                    {"role": "system", "content": "你是 SEO 优化专家，请直接输出优化后的 Markdown 文章。"},
+                                    {"role": "user", "content": ext_seo_prompt},
+                                ],
+                                temperature=0.6,
+                                max_tokens=8000,
+                            )
+                            optimized = _strip_code_fences(opt_r.choices[0].message.content.strip())
+                            st.session_state["ext_article"] = optimized
+                            st.success("SEO 优化完成！文章已更新，可切换其他 Tab 查看新评分。")
+                        except Exception as e:
+                            st.error(f"优化失败：{e}")
+
+        # ── GEO 评分 Tab ─────────────────────────────────────────
+        with ext_tab_geo:
+            ext_geo_result = geo_score(ext_art, [])
+            ext_g_score = ext_geo_result["score"]
+            ext_g_color = "#00c853" if ext_g_score >= 80 else (
+                "#fbbf24" if ext_g_score >= 50 else "#f87171"
+            )
+
+            egc1, egc2 = st.columns([1, 3])
+            with egc1:
+                st.markdown(
+                    f"<div style='text-align:center;'>"
+                    f"<div class='score-ring' style='border:3px solid {ext_g_color};color:{ext_g_color};font-size:2rem;'>"
+                    f"{ext_g_score}</div>"
+                    f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>GEO 评分</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            with egc2:
+                ed = ext_geo_result["details"]
+                st.markdown(f"""
+| 指标 | 数值 |
+|---|---|
+| 开头段落长度 | {ed['answer_first_len']} 字 |
+| 问句 H2 占比 | {ed['question_h2_ratio']}% |
+| 数据引用数 | {ed['citation_count']} 处 |
+| 长段落数 | {ed['long_paragraphs']} 个 |
+| 实体提及数 | {ed['entity_mentions']} 种 |
+| FAQ 数量 | {ed['faq_count']} 对 |
+| 权威引用 | {ed['authority_refs']} 处 |
+""")
+
+            if ext_geo_result["issues"]:
+                st.markdown("**需改进的问题：**")
+                for iss in ext_geo_result["issues"]:
+                    st.markdown(f"- {iss}")
+            if ext_geo_result["tips"]:
+                st.markdown("**优化建议：**")
+                for tip in ext_geo_result["tips"]:
+                    st.markdown(f"- {tip}")
+
+            if ext_g_score < 90:
+                st.divider()
+                st.markdown(f"**当前 GEO 评分 {ext_g_score}/100，建议优化到 90+**")
+                if st.button("🧠 一键 GEO 优化到 90+", use_container_width=True, key="ext_geo_opt_btn"):
+                    ext_geo_prompt = build_geo_optimize_prompt(ext_art, ext_geo_result, keywords=ext_kw)
+                    with st.spinner("🤖 正在 GEO 优化中..."):
+                        try:
+                            opt_c = get_client(api_key_input, base_url_input)
+                            opt_r = opt_c.chat.completions.create(
+                                model=model_input.strip() if model_input else "gemini-2.5-flash",
+                                messages=[
+                                    {"role": "system", "content": "你是 GEO（Generative Engine Optimization）专家，专门优化内容以提升在 ChatGPT、Perplexity、Gemini 等 AI 搜索引擎中的可见性。请直接输出优化后的 Markdown 文章。"},
+                                    {"role": "user", "content": ext_geo_prompt},
+                                ],
+                                temperature=0.6,
+                                max_tokens=8000,
+                            )
+                            optimized = _strip_code_fences(opt_r.choices[0].message.content.strip())
+                            st.session_state["ext_article"] = optimized
+                            st.success("GEO 优化完成！文章已更新，可切换其他 Tab 查看新评分。")
+                        except Exception as e:
+                            st.error(f"GEO 优化失败：{e}")
+
+        # ── 双优化 Tab ───────────────────────────────────────────
+        with ext_tab_dual:
+            st.markdown("**SEO + GEO 联合优化**")
+            st.caption("同时将 SEO 和 GEO 评分优化到 90+")
+
+            ext_stats_d = reading_stats(ext_art, ext_kw)
+            ext_geo_d = geo_score(ext_art, [])
+
+            edc1, edc2 = st.columns(2)
+            ext_seo_sd = ext_stats_d["structure_score"]
+            ext_geo_sd = ext_geo_d["score"]
+            esc = "#00c853" if ext_seo_sd >= 90 else ("#fbbf24" if ext_seo_sd >= 50 else "#f87171")
+            egc = "#00c853" if ext_geo_sd >= 90 else ("#fbbf24" if ext_geo_sd >= 50 else "#f87171")
+
+            with edc1:
+                st.markdown(
+                    f"<div style='text-align:center;'>"
+                    f"<div class='score-ring' style='border:3px solid {esc};color:{esc};font-size:1.8rem;'>"
+                    f"{ext_seo_sd}</div>"
+                    f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>SEO 评分</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            with edc2:
+                st.markdown(
+                    f"<div style='text-align:center;'>"
+                    f"<div class='score-ring' style='border:3px solid {egc};color:{egc};font-size:1.8rem;'>"
+                    f"{ext_geo_sd}</div>"
+                    f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>GEO 评分</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+            ext_both_pass = ext_seo_sd >= 90 and ext_geo_sd >= 90
+            if ext_both_pass:
+                st.success("SEO 和 GEO 评分均已达到 90+，无需优化！")
+            else:
+                ext_shortfalls = []
+                if ext_seo_sd < 90:
+                    ext_shortfalls.append(f"SEO {ext_seo_sd} → 90+")
+                if ext_geo_sd < 90:
+                    ext_shortfalls.append(f"GEO {ext_geo_sd} → 90+")
+                st.markdown(f"**目标：** {' & '.join(ext_shortfalls)}")
+
+                if st.button("⚡ 一键 SEO + GEO 双优化到 90+", use_container_width=True, key="ext_dual_opt_btn"):
+                    ext_dual_prompt = build_dual_optimize_prompt(
+                        ext_art, ext_stats_d, ext_geo_d, keywords=ext_kw,
+                    )
+                    with st.spinner("🤖 正在联合优化 SEO + GEO（约 30 秒）..."):
+                        try:
+                            dual_c = get_client(api_key_input, base_url_input)
+                            dual_r = dual_c.chat.completions.create(
+                                model=model_input.strip() if model_input else "gemini-2.5-flash",
+                                messages=[
+                                    {"role": "system", "content": "你是同时精通 SEO 和 GEO（Generative Engine Optimization）的内容优化专家。你必须同时满足 SEO 和 GEO 两套评分标准，不能为了一项牺牲另一项。请直接输出优化后的 Markdown 文章。"},
+                                    {"role": "user", "content": ext_dual_prompt},
+                                ],
+                                temperature=0.6,
+                                max_tokens=10000,
+                            )
+                            optimized = _strip_code_fences(dual_r.choices[0].message.content.strip())
+                            st.session_state["ext_article"] = optimized
+                            st.success(f"双优化完成！（优化前：SEO {ext_seo_sd} / GEO {ext_geo_sd}）文章已更新。")
+                        except Exception as e:
+                            st.error(f"双优化失败：{e}")
+
+        # ── AI 检测 + 人性化 Tab ─────────────────────────────────
+        with ext_tab_ai:
+            st.markdown("**AI 内容检测 & 人性化改写**")
+            st.caption("检测 AI 生成痕迹，一键人性化改写，或三合一优化")
+
+            if st.button("🔍 检测 AI 痕迹", use_container_width=True, key="ext_ai_detect_btn"):
+                ext_detect_prompt = f"""请分析以下文章，评估其被 AI 检测工具（如 GPTZero、Originality.ai）判定为 AI 生成内容的可能性。
+
+请输出：
+1. AI 检测评分（0-100，0=完全人类，100=明显 AI）
+2. 检测到的 AI 痕迹列表
+3. 具体哪些段落或表述最像 AI 生成
+
+请用以下格式输出：
+AI 评分：XX/100
+AI 痕迹：
+- xxx
+- xxx
+高风险段落：
+- "xxx" — 原因：xxx
+
+【文章】
+{ext_art}"""
+
+                with st.spinner("🔍 正在检测 AI 痕迹..."):
+                    try:
+                        det_c = get_client(api_key_input, base_url_input)
+                        det_r = det_c.chat.completions.create(
+                            model=model_input.strip() if model_input else "gemini-2.5-flash",
+                            messages=[
+                                {"role": "system", "content": "你是 AI 内容检测专家，擅长分析文本是否由 AI 生成。"},
+                                {"role": "user", "content": ext_detect_prompt},
+                            ],
+                            temperature=0.3,
+                            max_tokens=2000,
+                        )
+                        st.session_state["ext_detect_result"] = det_r.choices[0].message.content.strip()
+                    except Exception as e:
+                        st.error(f"检测失败：{e}")
+
+            if st.session_state.get("ext_detect_result"):
+                st.markdown(st.session_state["ext_detect_result"])
+                st.divider()
+
+            ext_col_hum, ext_col_tri = st.columns(2)
+            with ext_col_hum:
+                ext_do_hum = st.button("✍️ 人性化改写", use_container_width=True, key="ext_humanize_btn")
+            with ext_col_tri:
+                ext_do_tri = st.button("🚀 三合一优化", use_container_width=True, key="ext_triple_btn",
+                                       help="同时优化 SEO + GEO + 降低 AI 检测率")
+
+            if ext_do_hum:
+                ext_hum_prompt = f"""请将以下文章进行人性化改写，目标：降低 AI 检测率至 30 以下。
+
+⚠️ 核心约束：人性化的同时 必须保留 以下 SEO / GEO 结构元素（不可删除或弱化）：
+1. H1 标题（#）和所有 H2 标题（##）的结构与关键词
+2. 关键词自然分布：{ext_kw if ext_kw else 'MPChat, mp.net'}
+3. 所有数据引用和统计数字（如「据...报告，...」格式）
+4. FAQ 段落（## 常见问题）及其全部 Q&A 对
+5. CTA 段落（引导访问 mp.net）
+6. 产品实体名称 MPChat / MP Card / MP Wallet / mp.net
+7. 权威来源引用（Chainalysis、CoinDesk 等）
+
+人性化改写技巧（在保留以上结构的前提下应用）：
+- 口语化、个人化表达（如「说实话」「我自己的体验是」）
+- 增加主观感受和具体细节
+- 打破 AI 固定句式（避免「首先…其次…最后…」等模板）
+- 变化句子长度（短句长句交替，偶尔用感叹句、反问句）
+- 适当使用不完美表达（口语缩写、省略）
+- 增加故事元素和场景描写
+
+【原文】
+{ext_art}
+
+请直接输出改写后的完整文章（Markdown 格式），保留所有 H1/H2/FAQ/CTA 结构。"""
+
+                with st.spinner("✍️ 正在人性化改写中..."):
+                    try:
+                        hum_c = get_client(api_key_input, base_url_input)
+                        hum_r = hum_c.chat.completions.create(
+                            model=model_input.strip() if model_input else "gemini-2.5-flash",
+                            messages=[
+                                {"role": "system", "content": "你是一位资深的人类内容编辑。改写时必须保留文章的 H1/H2 标题结构、FAQ 段落、CTA、数据引用和关键词分布，只改写行文风格使之更自然。"},
+                                {"role": "user", "content": ext_hum_prompt},
+                            ],
+                            temperature=0.8,
+                            max_tokens=8000,
+                        )
+                        humanized = _strip_code_fences(hum_r.choices[0].message.content.strip())
+                        st.session_state["ext_article"] = humanized
+                        st.session_state["ext_detect_result"] = ""
+                        st.success("人性化改写完成！文章已更新，可切换其他 Tab 查看新评分。")
+                    except Exception as e:
+                        st.error(f"人性化改写失败：{e}")
+
+            if ext_do_tri:
+                ext_geo_tri = geo_score(ext_art, [])
+                ext_stats_tri = reading_stats(ext_art, ext_kw)
+                ext_triple_prompt = build_triple_optimize_prompt(
+                    ext_art, ext_stats_tri, ext_geo_tri,
+                    keywords=ext_kw if ext_kw else "MPChat, mp.net",
+                )
+                with st.spinner("🚀 三合一优化中（SEO + GEO + 人性化，约 40 秒）..."):
+                    try:
+                        tri_c = get_client(api_key_input, base_url_input)
+                        tri_r = tri_c.chat.completions.create(
+                            model=model_input.strip() if model_input else "gemini-2.5-flash",
+                            messages=[
+                                {"role": "system", "content": "你是同时精通 SEO、GEO 和人性化写作的内容专家。你的目标是输出一篇 SEO ≥ 90、GEO ≥ 90、AI 检测率 ≤ 30 的文章。"},
+                                {"role": "user", "content": ext_triple_prompt},
+                            ],
+                            temperature=0.7,
+                            max_tokens=10000,
+                        )
+                        tripled = _strip_code_fences(tri_r.choices[0].message.content.strip())
+                        seo_b = ext_stats_tri.get("structure_score", 0)
+                        geo_b = ext_geo_tri["score"]
+                        st.session_state["ext_article"] = tripled
+                        st.session_state["ext_detect_result"] = ""
+                        st.success(f"三合一优化完成！（优化前：SEO {seo_b} / GEO {geo_b}）文章已更新。")
+                    except Exception as e:
+                        st.error(f"三合一优化失败：{e}")
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 单篇生成逻辑
@@ -1810,7 +2239,6 @@ AI 痕迹：
                     st.error(f"人性化改写失败：{e}")
 
         if do_triple:
-            from geo_tools import build_triple_optimize_prompt
             faq_tri = result.get("faq_pairs", [])
             geo_tri = geo_score(article, faq_tri)
             stats_tri = reading_stats(article, kw_human)

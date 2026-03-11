@@ -97,6 +97,8 @@ def publish_to_hashnode(
             json={"query": query, "variables": variables},
             timeout=30,
         )
+        if r.status_code not in (200, 201):
+            return {"ok": False, "error": f"HTTP {r.status_code}: {r.text[:200]}"}
         data = r.json()
         post = (data.get("data") or {}).get("publishPost", {}).get("post")
         if post:
