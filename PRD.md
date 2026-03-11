@@ -133,6 +133,25 @@ mp.net 官网 4 页 + Medium RSS + Twitter + Google/百度/DuckDuckGo + GlobeNew
 
 max_tokens = 16384，避免输出截断。
 
+### 3.9 SEO + GEO 双优化引擎
+
+**问题背景：** 单独优化 SEO 可能降低 GEO 评分（如拉长段落增加关键词密度，违反 GEO 短段落要求），反之亦然。
+
+**解决方案：** 联合优化 Prompt 设计，在一次 LLM 调用中同时满足两套评分标准。
+
+**兼容策略（写入 System Prompt）：**
+- H2 标题：问句格式（满足 GEO）+ 含目标关键词（满足 SEO）
+- 段落：短段落 2-3 句（满足 GEO）+ 自然植入关键词（满足 SEO）
+- 数据引用：带出处的统计数据，同时提升 GEO 可信度和 SEO 内容质量
+- FAQ 段落：满足 GEO 的 Q&A 结构，同时覆盖 SEO 长尾关键词
+- CTA：明确的行动号召（SEO 必需），融入 Answer-First 段落（GEO 加分）
+
+**UI 设计：**
+- Module D 新增「双优化」Tab，显示 SEO 和 GEO 双评分环
+- 仅当任一分数 < 90 时显示「一键双优化到 90+」按钮
+- 优化完成后显示优化前后分数对比
+- max_tokens = 10000，确保长文章+FAQ 不被截断
+
 ---
 
 ## 4. 输出模块
@@ -161,9 +180,10 @@ max_tokens = 16384，避免输出截断。
 
 Tab 1: Schema JSON-LD（Article + FAQPage + Organization）
 Tab 2: 内部链接（基于卖点自动生成）
-Tab 3: 阅读统计 + SEO 评分（0-100）+ 一键 SEO 优化
+Tab 3: SEO 评分（0-100）+ 一键 SEO 优化
 Tab 4: GEO 评分（0-100）+ 一键 GEO 优化
-Tab 5: AI 内容检测 + 一键人性化改写
+Tab 5: SEO + GEO 双优化（见 3.9）
+Tab 6: AI 内容检测 + 一键人性化改写
 
 ### Module E — 多平台分发
 

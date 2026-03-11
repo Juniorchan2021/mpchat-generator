@@ -35,7 +35,7 @@ from seo_tools import (
     generate_internal_links,
     reading_stats,
 )
-from geo_tools import geo_score, generate_faq_schema, build_geo_optimize_prompt
+from geo_tools import geo_score, generate_faq_schema, build_geo_optimize_prompt, build_dual_optimize_prompt
 from publishers import (
     publish_to_devto,
     publish_to_hashnode,
@@ -1284,9 +1284,9 @@ if "last_result" in st.session_state:
     st.markdown('<div class="output-card-title">🛠️ 模块 D — SEO / GEO 工具箱</div>',
                 unsafe_allow_html=True)
 
-    tab_schema, tab_links, tab_stats, tab_geo, tab_ai_detect = st.tabs(
-        ["📋 Schema JSON-LD", "🔗 内部链接", "📊 SEO 评分",
-         "🧠 GEO 评分", "🤖 AI 检测"]
+    tab_schema, tab_links, tab_stats, tab_geo, tab_dual, tab_ai_detect = st.tabs(
+        ["📋 Schema", "🔗 内部链接", "📊 SEO 评分",
+         "🧠 GEO 评分", "⚡ 双优化", "🤖 AI 检测"]
     )
 
     with tab_schema:
@@ -1500,6 +1500,87 @@ if "last_result" in st.session_state:
                         st.success("✅ GEO 优化完成！页面即将刷新显示新文章...")
                     except Exception as e:
                         st.error(f"GEO 优化失败：{e}")
+
+    # ── Tab: SEO + GEO 双优化 ──────────────────────────────────────────────
+    with tab_dual:
+        st.markdown("**SEO + GEO 联合优化**")
+        st.caption("同时将 SEO 和 GEO 评分优化到 90+，避免优化一项时拉低另一项")
+
+        kw_dual = st.session_state.get("last_keywords", "")
+        faq_dual = result.get("faq_pairs", [])
+        stats_dual = reading_stats(article, kw_dual)
+        geo_dual = geo_score(article, faq_dual)
+
+        dc1, dc2 = st.columns(2)
+        seo_s = stats_dual["structure_score"]
+        geo_s = geo_dual["score"]
+        seo_c = "#00c853" if seo_s >= 90 else ("#fbbf24" if seo_s >= 50 else "#f87171")
+        geo_c = "#00c853" if geo_s >= 90 else ("#fbbf24" if geo_s >= 50 else "#f87171")
+
+        with dc1:
+            st.markdown(
+                f"<div style='text-align:center;'>"
+                f"<div class='score-ring' style='border:3px solid {seo_c};color:{seo_c};font-size:1.8rem;'>"
+                f"{seo_s}</div>"
+                f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>SEO 评分</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        with dc2:
+            st.markdown(
+                f"<div style='text-align:center;'>"
+                f"<div class='score-ring' style='border:3px solid {geo_c};color:{geo_c};font-size:1.8rem;'>"
+                f"{geo_s}</div>"
+                f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>GEO 评分</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+        both_pass = seo_s >= 90 and geo_s >= 90
+        if both_pass:
+            st.success("SEO 和 GEO 评分均已达到 90+，无需优化！")
+        else:
+            shortfalls = []
+            if seo_s < 90:
+                shortfalls.append(f"SEO {seo_s} → 90+")
+            if geo_s < 90:
+                shortfalls.append(f"GEO {geo_s} → 90+")
+            st.markdown(f"**目标：** {' & '.join(shortfalls)}")
+
+            if st.button("⚡ 一键 SEO + GEO 双优化到 90+", use_container_width=True,
+                         key="dual_optimize_btn"):
+                dual_prompt = build_dual_optimize_prompt(
+                    article, stats_dual, geo_dual, keywords=kw_dual,
+                )
+                with st.spinner("🤖 正在联合优化 SEO + GEO（约 30 秒）..."):
+                    try:
+                        dual_client = get_client(api_key_input, base_url_input)
+                        dual_response = dual_client.chat.completions.create(
+                            model=model_input.strip() if model_input else "gemini-2.5-flash",
+                            messages=[
+                                {"role": "system", "content": "你是同时精通 SEO 和 GEO（Generative Engine Optimization）的内容优化专家。你必须同时满足 SEO 和 GEO 两套评分标准，不能为了一项牺牲另一项。请直接输出优化后的 Markdown 文章。"},
+                                {"role": "user", "content": dual_prompt},
+                            ],
+                            temperature=0.6,
+                            max_tokens=10000,
+                        )
+                        optimized = dual_response.choices[0].message.content.strip()
+                        if optimized.startswith("```"):
+                            d_lines = optimized.split("\n")
+                            d_inner = "\n".join(d_lines[1:])
+                            if "```" in d_inner:
+                                optimized = d_inner[:d_inner.rfind("```")].strip()
+                            else:
+                                optimized = d_inner.strip()
+
+                        st.session_state["last_result"]["article"] = optimized
+                        st.session_state["_pending_rerun"] = True
+                        st.success(
+                            f"✅ 双优化完成！（优化前：SEO {seo_s} / GEO {geo_s}）\n\n"
+                            f"页面即将刷新，请切回此 Tab 查看新分数。"
+                        )
+                    except Exception as e:
+                        st.error(f"双优化失败：{e}")
 
     # ── Tab: AI 检测 + 人性化 ────────────────────────────────────────────────
     with tab_ai_detect:

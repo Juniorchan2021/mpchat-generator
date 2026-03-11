@@ -197,3 +197,69 @@ def build_geo_optimize_prompt(article: str, geo_result: dict, keywords: str = ""
 
 请直接输出优化后的完整文章（Markdown 格式），不要输出 JSON，不要解释修改内容。
 在文末加入 FAQ 段落（## 常见问题），包含 5 个 Q&A。"""
+
+
+def build_dual_optimize_prompt(
+    article: str,
+    seo_stats: dict,
+    geo_result: dict,
+    keywords: str = "",
+) -> str:
+    """Build prompt for combined SEO + GEO optimization to 90+ on both."""
+    seo_issues: list[str] = []
+    if seo_stats.get("h1_count", 0) < 1:
+        seo_issues.append("缺少 H1 标题")
+    if seo_stats.get("h2_count", 0) < 3:
+        seo_issues.append(f"H2 段落不足（当前 {seo_stats.get('h2_count', 0)} 个，需 ≥3）")
+    if not seo_stats.get("has_cta"):
+        seo_issues.append("缺少 CTA")
+    if seo_stats.get("word_count", 0) < 600:
+        seo_issues.append(f"字数偏少（{seo_stats.get('word_count', 0)}）")
+    kw_density = seo_stats.get("keyword_density", {})
+    low_kw = [k for k, v in kw_density.items() if v.get("count", 0) < 2]
+    if low_kw:
+        seo_issues.append(f"关键词密度不足：{', '.join(low_kw)}")
+
+    geo_issues = geo_result.get("issues", [])
+
+    seo_text = "\n".join(f"- {i}" for i in seo_issues) if seo_issues else "- 无严重问题"
+    geo_text = "\n".join(f"- {i}" for i in geo_issues) if geo_issues else "- 无严重问题"
+
+    return f"""请同时优化以下文章的 SEO 和 GEO 表现，目标：两项评分均达到 90-100 分。
+
+⚠️ 关键约束：SEO 和 GEO 必须同时兼顾，不能为了提升一项而牺牲另一项。
+
+【当前 SEO 评分】{seo_stats.get('structure_score', 0)}/100
+【当前 GEO 评分】{geo_result['score']}/100
+
+【SEO 问题】
+{seo_text}
+
+【GEO 问题】
+{geo_text}
+
+【SEO 优化要求（必须满足）】
+1. 1 个 H1（#）+ 至少 3 个 H2（##）
+2. 关键词密度 1-2%（关键词：{keywords if keywords else 'MPChat, 加密支付'}）
+3. 结尾有明确 CTA（引导下载 MPChat 或申请 MP Card）
+4. 总长度 800-1200 字，每段 ≤150 字
+
+【GEO 优化要求（必须满足）】
+1. Answer-First：开头 40-100 字直接回答核心问题
+2. 问句 H2：至少 30% 的 H2 使用问句
+3. 数据引用：5+ 个带来源的统计数据
+4. 短段落：每段 2-3 句
+5. 权威引用：3+ 处「据 [来源] 研究显示」
+6. 实体一致：全文统一使用 MPChat / MP Card / MP Wallet
+7. 文末 FAQ：加入「## 常见问题」段落，包含 5 个 Q&A，每答案 < 100 字
+
+【兼容策略】
+- H2 标题：用问句格式（满足 GEO）+ 含关键词（满足 SEO）
+- 段落：短段落（满足 GEO）+ 自然植入关键词（满足 SEO）
+- 数据引用同时提升 GEO 可信度和 SEO 内容质量
+- FAQ 段落同时满足 GEO 的 Q&A 需求和 SEO 的长尾关键词覆盖
+
+【原文】
+{article}
+
+请直接输出优化后的完整文章（Markdown 格式），不要输出 JSON，不要解释修改内容。"""
