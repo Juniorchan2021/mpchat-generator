@@ -364,7 +364,29 @@ def generate_article(client, model, language, scenario_label, audience_tag,
             raw = inner[:inner.rfind("```")].strip()
         else:
             raw = inner.strip()
-    return json.loads(raw)
+
+    import re
+    if not raw.startswith("{"):
+        match = re.search(r'\{[\s\S]*\}', raw)
+        if match:
+            raw = match.group(0)
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        raw_fixed = re.sub(r',\s*}', '}', raw)
+        raw_fixed = re.sub(r',\s*]', ']', raw_fixed)
+        try:
+            return json.loads(raw_fixed)
+        except json.JSONDecodeError:
+            return {
+                "seo_title": "MPChat — Live with Crypto",
+                "meta_description": "AI 生成内容解析失败，请重试。",
+                "slug_suggestion": "mpchat-article",
+                "article": raw,
+                "image_prompts": [],
+                "image_search_terms": ["crypto payment", "digital finance"],
+            }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -602,7 +624,7 @@ with st.sidebar:
     if use_pixabay:
         pixabay_key = st.text_input(
             "Pixabay API Key",
-            value=os.getenv("PIXABAY_API_KEY", ""),
+            value=os.getenv("PIXABAY_API_KEY", "46561407-37c46214d0e52dffc32a430eb3"),
             type="password",
             placeholder="从 pixabay.com/api/docs 获取",
         )
