@@ -1,7 +1,7 @@
 # MPChat 智能软文生成器 — 产品设计说明文档
 
-**版本：v4.0.1**
-**当前版本：v4.0.1 (已上线)**
+**版本：v4.1**
+**当前版本：v4.1 (已上线)**
 **最后更新：2026-03-11**
 **开发工具：全部代码（后端逻辑 + Streamlit UI + 工具模块）由 Claude Opus 编写和维护**
 
@@ -105,15 +105,24 @@ Phase 2 — 发展中市场 (6 种)：
 - 🗣️ 用户证言型：口语化，个人情感，真实感
 - 📋 清单盘点型：Top-N格式，信息密度高，易传播
 
-### 3.6 配图系统（3 级图源策略）
+### 3.6 配图系统（3 级图源 + 随机化 + 智能搜索）
 
-采用 3 级 fallback 架构，确保始终有图可用：
+采用 3 级 fallback 架构 + 双重随机化，确保始终有图可用且每次生成不重复：
 
+**图源架构：**
 - **Tier 1 — Pixabay（主图源）**：REST API 搜索，返回高分辨率图片 + 摄影师元数据，100 次/分钟，需 API Key
 - **Tier 2 — Pexels（补充图源）**：REST API 搜索，200 次/小时免费额度，需 API Key（可选）
-- **Tier 3 — Placewise CDN（兜底）**：URL-based 语义图片服务（`img.placewise.io/800x600-query`），无需 API Key，当 Pixabay + Pexels 均无结果时自动启用
-- 自动在文章 H2 标题后插入配图（st.image() 渲染）
-- AI 配图提示词（Midjourney / DALL-E）同时输出
+- **Tier 3 — Placewise CDN（兜底）**：URL-based 语义图片服务（`img.placewise.io/800x600-query`），无需 API Key
+
+**随机化机制（v4.1 新增）：**
+- 每次 API 请求随机选择 1-5 页结果（`page = random.randint(1, 5)`），避免同一搜索词总返回同样图片
+- 请求比实际需要多 4 张（`per_page = count + 4`），从返回池中 `random.shuffle()` 后截取
+- 最终合并结果再次 shuffle，确保图片排序每次不同
+
+**智能搜索词策略（v4.1 新增）：**
+- **优先级**：AI 生成的 `image_search_terms`（每篇文章独特）> 文章标题关键词提取 > 场景静态 `pixabay_terms`
+- **Prompt 强化**：要求 AI 生成 5 个具体的 2-4 词搜索短语（如 `"woman paying coffee smartphone"`），覆盖不同视觉场景（支付/生活方式/科技/人物/城市），禁止 `"crypto"` 等太泛泛的词
+- **标题提取**：自动从 `seo_title` 提取前 4 个有效词作为补充搜索词，提升配图与文章内容的相关性
 
 注意：Placewise 是 URL-based CDN 服务（非 REST 搜索 API），通过语义 slug 直接生成图片 URL。
 
@@ -144,13 +153,72 @@ max_tokens = 16384，避免输出截断。
 - 段落：短段落 2-3 句（满足 GEO）+ 自然植入关键词（满足 SEO）
 - 数据引用：带出处的统计数据，同时提升 GEO 可信度和 SEO 内容质量
 - FAQ 段落：满足 GEO 的 Q&A 结构，同时覆盖 SEO 长尾关键词
-- CTA：明确的行动号召（SEO 必需），融入 Answer-First 段落（GEO 加分）
+- CTA：引导访问 mp.net（SEO 必需），融入 Answer-First 段落（GEO 加分）
 
 **UI 设计：**
 - Module D 新增「双优化」Tab，显示 SEO 和 GEO 双评分环
 - 仅当任一分数 < 90 时显示「一键双优化到 90+」按钮
 - 优化完成后显示优化前后分数对比
 - max_tokens = 10000，确保长文章+FAQ 不被截断
+
+### 3.10 三合一优化引擎（SEO + GEO + 人性化）（v4.1 新增）
+
+**问题背景：** 用户使用「一键人性化改写」降低 AI 检测率后，SEO 和 GEO 评分大幅下降（常见降幅 20-40 分）。三项指标互相冲突：人性化打破结构 → SEO/GEO 分数崩塌。
+
+**根因分析：**
+- 原人性化 Prompt 仅模糊要求"保持 SEO 质量"，未明确列出不可删除的结构元素
+- LLM 为了降低 AI 感，会移除 H2 标题结构、FAQ 段落、数据引用、关键词密度等 SEO/GEO 关键元素
+
+**解决方案：三层约束架构**
+
+```
+A 层 — SEO 硬性约束（结构层，不可删减）
+├── H1/H2 标题结构 + 关键词
+├── 关键词密度 1-2%
+├── CTA（引导 mp.net）
+└── 800-1200 字
+
+B 层 — GEO 硬性约束（结构层，不可删减）
+├── Answer-First 开头
+├── 问句 H2 ≥ 30%
+├── 数据引用 5+
+├── 权威引用 3+
+├── 实体一致性
+└── FAQ 段落 5 个 Q&A
+
+C 层 — 人性化（在 A/B 框架内改写风格）
+├── 口语化叙述、第一人称
+├── 场景故事细节
+├── 打破 AI 固定句式
+├── 句子长度变化
+├── 感叹句/反问句
+├── 数据引用人性化包裹
+└── H2 标题个性化
+```
+
+**兼容策略（D 层）：**
+- H2 = 问句（GEO）+ 含关键词（SEO）+ 口语化（人性化）
+- 数据引用 = 带来源（GEO）+ 个人化表述包裹（人性化）
+- FAQ = 结构化 Q&A（GEO/SEO）+ 答案用口语写（人性化）
+- CTA = 明确行动引导（SEO）+ 第一人称推荐语气（人性化）
+
+**UI 设计：**
+- Module D「AI 检测」Tab 内，「人性化改写」和「三合一优化」并排两个按钮
+- 「人性化改写」：仅降低 AI 检测率，保留 SEO/GEO 结构（改进后的 Prompt）
+- 「三合一优化」：一次 LLM 调用同时达成 SEO ≥ 90 + GEO ≥ 90 + AI 检测率 ≤ 30
+
+**影响文件：** `geo_tools.py`（新增 `build_triple_optimize_prompt()`）、`app.py`（AI 检测 Tab 重构）
+
+### 3.11 官网 URL 统一（v4.1 修复）
+
+**问题背景：** 产品知识库 `knowledge.txt` 中的官网写为 `mpchat.io`（旧域名），导致 AI 生成的文章 CTA 推的是错误网址。
+
+**修复范围：**
+- `knowledge.txt`：品牌定位和 CTA 段落的官网 URL
+- `app.py` 系统 Prompt：CTA 指令明确标注"官网是 mp.net，不是 mpchat.io"
+- `app.py` SEO 优化 / 人性化 Prompt：CTA 引用
+- `geo_tools.py`：双优化和三合一优化的 CTA 指令
+- `seo_tools.py`：内部链接基础 URL（原本已正确指向 mp.net）
 
 ---
 
@@ -183,7 +251,7 @@ Tab 2: 内部链接（基于卖点自动生成）
 Tab 3: SEO 评分（0-100）+ 一键 SEO 优化
 Tab 4: GEO 评分（0-100）+ 一键 GEO 优化
 Tab 5: SEO + GEO 双优化（见 3.9）
-Tab 6: AI 内容检测 + 一键人性化改写
+Tab 6: AI 内容检测 + 人性化改写 + 三合一优化（见 3.10）
 
 ### Module E — 多平台分发
 
@@ -271,23 +339,21 @@ MPChat-软文机器人/
 
 **影响文件：** `image_client.py`, `app.py`（侧边栏新增 Pexels Key 输入）
 
-### 9.2 SEO/GEO 优化按钮无响应（v4.0 → v4.0.1 修复）
+### 9.2 SEO/GEO 优化按钮无响应（v4.0 → v4.0.1 修复 → v4.1 重构）
 
-**问题描述：** 点击「一键 SEO 优化到 90+」或「一键 GEO 优化到 90+」后，加载动画出现但页面无变化。
+**问题描述（v4.0）：** 点击「一键 SEO 优化到 90+」后，加载动画出现但页面无变化。
 
-**根因分析：**
-- 按钮点击后 LLM 返回优化文章，代码调用 `st.rerun()` 刷新页面
-- `st.rerun()` 在 `st.spinner()` + `st.tabs()` 嵌套上下文内调用时行为异常
-- 页面重新执行后，Tab 重置到第一个（Schema），用户看不到优化结果
-- 部分情况下 `st.rerun()` 在嵌套上下文中被 Streamlit 静默忽略
+**v4.0.1 修复（延迟 rerun）：** 使用 `_pending_rerun` flag + 顶层 `st.rerun()` 延迟刷新。
 
-**修复方案：** 延迟 rerun 模式
-1. 优化完成后，结果写入 `st.session_state`，设置 `_pending_rerun = True`
-2. 显示 `st.success()` 反馈消息
-3. 在输出区域顶部检测 `_pending_rerun` flag，在安全上下文中执行 `st.rerun()`
-4. 同样模式应用于 SEO 优化、GEO 优化、人性化改写三个按钮
+**v4.1 问题（Tab 跳转）：** 延迟 rerun 虽然解决了按钮无响应，但 `st.rerun()` 会重置所有 Tab 到第一个（Schema），导致用户点击 AI 检测 / 人性化后页面跳到 Schema Tab，体验极差。
 
-**影响文件：** `app.py`（Module D 三个优化按钮 + 输出区域顶部 rerun 检查）
+**v4.1 最终方案：完全移除 st.rerun()**
+1. 移除全局 `_pending_rerun` flag 和 `st.rerun()` 调用
+2. 所有优化按钮（SEO / GEO / 双优化 / 人性化 / 三合一）完成后，只更新 `st.session_state` 中的文章内容 + 显示 `st.success()` 消息
+3. 用户停留在当前 Tab，下次切换 Tab 或点击任何控件时自动看到更新后的内容
+4. Tab 状态不再被重置，交互体验大幅改善
+
+**影响文件：** `app.py`（移除 4 处 `_pending_rerun = True` 和 1 处全局 rerun 检查）
 
 ### 9.3 API Key 安全存储（v4.0 → v4.0.1 修复）
 
@@ -301,54 +367,126 @@ MPChat-软文机器人/
 
 ---
 
-## 10. 硅谷级 UI/UX 交互升级方案 (v4.1 规划)
+## 10. Stripe × Apple UI/UX 重构 (v4.1 已实施)
 
-为了提升内部团队的使用体验，使其达到类似 Vercel、Linear、OpenAI 等硅谷顶尖科技公司的产品质感，我们将在 **不改动核心底层逻辑代码** 的前提下，通过 Streamlit 原生组件优化与自定义 CSS 注入，进行深度的 UI/UX 改造。
+v4.1 对整个 UI 进行了彻底重构，设计灵感来自 Stripe Dashboard（交互 & 配色）+ Apple（字体 & 排版），使用 MP.NET 官方品牌元素。
 
-### 10.1 视觉语言重塑 (Visual Language)
+### 10.1 字体系统
 
-- **极简主义主题 (Minimalist Theme)**：
-  - 采用高对比度、低饱和度的色彩规范（如 Vercel 的黑白灰体系）。
-  - 通过 `.streamlit/config.toml` 配置全局主题：`primaryColor="#000000"`, `backgroundColor="#FFFFFF"`, `secondaryBackgroundColor="#FAFAFA"`, `textColor="#111827"`。
-- **排版升级 (Typography)**：
-  - 全局字体替换为 **Inter**（通过 CSS `@import` 引入），增强现代感与可读性。
-- **沉浸式体验 (Immersion)**：
-  - 注入 CSS 隐藏 Streamlit 原生的汉堡菜单 (`#MainMenu`)、底部水印 (`footer`) 和顶部装饰红线，打造纯净的独立 App 观感。
+```css
+font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+             "Helvetica Neue", Arial, sans-serif;
+```
+- 使用 Apple SF Pro 系统字体栈（macOS/iOS 原生渲染，零加载延迟）
+- 移除 Google Fonts 的 Inter 字体（减少外部请求，加快首屏渲染）
+- 启用 `-webkit-font-smoothing: antialiased` 提升暗色背景上的文字清晰度
 
-### 10.2 布局与空间管理 (Layout & Spacing)
+### 10.2 配色方案（Hybrid：MP.NET 黑底 + Stripe 蓝紫渐变）
 
-- **原生卡片式容器 (Native Card UI)**：
-  - **严禁使用 HTML `<div>` 强行包裹 Streamlit 组件**（这会导致 Streamlit 渲染树崩溃，出现点击选项后组件消失的 Bug）。
-  - 统一采用 Streamlit 1.30+ 原生的 `with st.container(border=True):` 来构建卡片，完美适配 Vercel 风格的浅灰色边框和细微阴影。
-- **侧边栏瘦身与重组 (Sidebar Optimization)**：
-  - **侧边栏仅保留全局/底层设置**：如 AI 服务商选择、API Key 填写、图库配置、多平台分发 API。使用 `st.expander` 进行收纳。
-  - **主操作区移至中台**：将「写作场景」、「主打卖点」、「语言选择」等高频操作移至主界面的核心卡片区，使用 `st.columns()` 进行多列紧凑排版。
-- **渐进式披露 (Progressive Disclosure)**：
-  - 遵循「如无必要，勿增实体」原则。将「温度设置」、「备用图库 Key」、「自定义 Prompt」等低频高级选项，收纳进 `st.expander("⚙️ Advanced Settings")` 中，保持界面清爽。
+| 元素 | 色值 |
+|---|---|
+| 背景 | `#09090B`（近黑） |
+| 侧边栏背景 | `#0C0C0F` |
+| 卡片背景 | `rgba(17,17,21,0.8)` + `backdrop-filter: blur(16px)` |
+| 主强调色 | `#635BFF`（Stripe Blurple） |
+| 渐变高光 | `linear-gradient(135deg, #635BFF, #0096FF)` |
+| 文字主色 | `#FAFAFA` |
+| 文字辅色 | `#A1A1AA` |
+| 文字弱色 | `#71717A` |
+| 边框 | `rgba(255,255,255,0.06)` |
+| 背景光效 | 双层径向渐变（蓝紫 + 青色弥散光） |
 
-### 10.3 交互反馈增强 (Micro-interactions & Feedback)
+### 10.3 品牌元素
 
-- **过程透明化 (Process Transparency)**：
-  - 废弃单调的 `st.spinner("正在生成...")`。
-  - 引入 `st.status("🚀 正在构建高转化软文...", expanded=True)`，在内部使用 `st.write()` 动态更新子任务状态（如：✅ 分析 SERP 数据... ⏳ 聚合多图库资源... ⏳ 驱动 LLM 引擎...），缓解长耗时任务带来的等待焦虑。
-- **轻量级提示 (Toast Notifications)**：
-  - 针对「复制成功」、「参数已重置」等非阻塞性操作，使用 `st.toast('内容已复制到剪贴板！', icon='📋')` 替代占用屏幕空间的 `st.success()`。
-- **防呆设计 (Fool-proofing)**：
-  - 在未填写 API Key 或未选择必填项时，禁用核心的「生成」按钮（或在点击时高亮提示缺失项），避免无效的 API 调用报错。
+- **Banner**：MP.NET 官方 Logo（`https://mp.net/Logo.png`，44px 高）+ 蓝紫渐变标题文字 + Stripe 风格版本徽章
+- **侧边栏顶部**：小尺寸 MP.NET Logo（28px）
+- **侧边栏底部**：MP.NET Logo + 版本号 footer
 
-### 10.4 数据可视化与仪表盘感 (Dashboard Feel)
+### 10.4 侧边栏重构（扁平分区布局）
 
-- **评分环形图与微动效**：
-  - SEO / GEO 评分不再使用纯文本。通过注入轻量级 HTML/CSS，将分数渲染为类似 Apple Watch 的**彩色环形进度条**（绿色 >90，黄色 70-89，红色 <70）。
-  - 使用 `st.metric(label="SEO 评分", value="92", delta="+15")` 直观展示一键优化前后的分数跃升。
-- **Segmented Control 风格标签页**：
-  - 通过 CSS 重写 `st.tabs()` 的样式，去除原生下划线，改为类似 macOS 或 iOS 的分段控制器（Segmented Control）样式，选中状态带有平滑的背景滑块过渡动画。
+**重大变更：** 彻底移除所有 `st.expander()` 折叠组件。
 
-### 10.5 行动号召 (CTA) 按钮重构
+原因：Streamlit 的 expander 在暗色主题下折叠/展开行为不稳定，且默认折叠导致 API Key 等关键配置不可见。
 
-- **按钮层级分明 (Button Hierarchy)**：
-  - **Primary CTA**（如「🚀 立即生成文章」）：使用品牌主色，全宽显示 (`use_container_width=True`)，视觉比重最大。
-  - **Secondary Actions**（如「一键双优化」、「生成配图」）：使用次级强调色或描边样式 (Outline)。
-  - **Tertiary Actions**（如「清空」、「复制」）：使用幽灵按钮 (Ghost button) 或纯文本链接样式，降低视觉干扰。
+新结构：
+```
+[MP.NET Logo]
+─── AI 服务商（section header）
+    selectbox + text_input × 2 + selectbox
+─── 优化模式
+    radio (SEO / SEO+GEO)
+─── 配图
+    toggle + conditional key inputs
+─── 数据源
+    SERP toggle + 网络知识库 toggle
+─── 多平台分发
+    Dev.to / Hashnode / Publication ID
+─── Footer (logo + version)
+```
 
-通过以上无需修改底层 Python 逻辑的纯 UI/UX 层改造，MPChat 软文生成器将从一个「内部脚本工具」蜕变为具有硅谷企业级质感的「现代化 SaaS 平台」。
+- 用 `st.divider()` + 自定义 CSS section header（`0.7rem, uppercase, #71717A`）分隔区块
+- 所有配置项始终可见，无需折叠展开
+- Radio 选项使用 pill 样式（CSS 圆角卡片 + hover 高光）
+
+### 10.5 组件样式
+
+- **卡片**：毛玻璃效果 `backdrop-filter: blur(16px)`，hover 时边框变蓝紫色
+- **按钮**：Stripe 风格渐变 `#635BFF → #5046E5`，hover 上浮 1px + 阴影增强
+- **输入框**：深色内嵌背景，focus 时 2px 蓝紫色光环
+- **Tabs**：Stripe Dashboard 胶囊标签页，选中态蓝紫半透明背景
+- **评分环**：60px 圆形 + `inset box-shadow` 描边
+
+### 10.6 Streamlit 隐藏元素策略
+
+```css
+#MainMenu { visibility: hidden; }           /* 汉堡菜单 */
+footer { visibility: hidden; }              /* Streamlit 水印 */
+header { background: transparent; }         /* 顶栏透明化 */
+[data-testid="collapsedControl"] { visible } /* 保留侧边栏切换按钮 */
+```
+
+注意：不能隐藏 `header`（会连带隐藏侧边栏切换按钮），只能设透明背景。
+
+---
+
+## 11. v4.1 修复记录
+
+### 11.1 优化按钮导致 Tab 跳转（v4.0.1 → v4.1）
+
+见 9.2 更新说明。
+
+### 11.2 人性化改写破坏 SEO/GEO 评分（v4.1 新增）
+
+**问题描述：** 使用「一键人性化改写」后，SEO 评分从 90 降到 60，GEO 从 88 降到 50。
+
+**根因：** 人性化 Prompt 过于宽泛（"保持 SEO 质量"），LLM 为降低 AI 感删除了 H2 结构、FAQ、数据引用等 SEO/GEO 核心元素。
+
+**修复方案：**
+1. 改进人性化 Prompt：明确列出 7 项不可删除的结构元素（H1/H2、关键词、FAQ、CTA、数据引用、实体名、权威来源）
+2. 改进 system message：强调"只改写行文风格，保留所有结构"
+3. 新增三合一优化按钮（见 3.10）
+
+**影响文件：** `app.py`（AI 检测 Tab 重构）、`geo_tools.py`（新增 `build_triple_optimize_prompt()`）
+
+### 11.3 配图重复且不相关（v4.1 新增）
+
+**问题描述：** 同一场景多次生成文章，配图完全相同；部分配图与文章内容不相关。
+
+**根因：**
+- Pixabay/Pexels API 每次请求 page=1，同搜索词返回同结果
+- 搜索词优先使用场景静态 `pixabay_terms`（如 "artificial intelligence"），太泛泛
+- AI 生成的 `image_search_terms` 被排在后面，且 Prompt 未要求具体性
+
+**修复方案：** 见 3.6 更新说明（随机页码 + shuffle + AI 优先搜索词 + 标题提取 + Prompt 强化）。
+
+**影响文件：** `image_client.py`（核心逻辑重构）、`app.py`（传入 article_title + 改进搜索词 Prompt）
+
+### 11.4 CTA 推广错误网址（v4.1 新增）
+
+**问题描述：** 生成的文章 CTA 推的是 `mpchat.io`（旧域名），而非正确的 `mp.net`。
+
+**根因：** `knowledge.txt` 产品知识库中官网写为 `mpchat.io`。
+
+**修复方案：** 见 3.11 说明。
+
+**影响文件：** `knowledge.txt`、`app.py`、`geo_tools.py`
