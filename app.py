@@ -558,26 +558,6 @@ html, body, [class*="css"] {
 header {visibility: hidden;}
 footer {visibility: hidden;}
 
-/* Card UI */
-.sv-card {
-    background-color: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 24px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    margin-bottom: 24px;
-}
-
-.sv-title {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #111827;
-    margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
 /* Banner */
 .mp-banner {
     background: #111827;
@@ -681,14 +661,6 @@ footer {visibility: hidden;}
 [data-testid="stSidebar"] .stMarkdown h3 {
     color: #111827; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
 }
-
-.kw-badge {
-    display: inline-block; padding: 2px 8px; border-radius: 10px;
-    font-size: 0.7rem; font-weight: 600; margin-left: 4px;
-}
-.kw-low  { background: #dcfce7; color: #065f46; border: 1px solid #bbf7d0; }
-.kw-med  { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
-.kw-high { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
 
 hr { border-color: #e5e7eb; }
 </style>
@@ -822,92 +794,86 @@ with st.sidebar:
 # ══════════════════════════════════════════════════════════════════════════════
 # 主区域 — 配置面板
 # ══════════════════════════════════════════════════════════════════════════════
-st.markdown('<div class="sv-card">', unsafe_allow_html=True)
-st.markdown('<div class="sv-title">📝 内容配置</div>', unsafe_allow_html=True)
+with st.container(border=True):
+    st.markdown("**📝 内容配置**")
+    col_lang, col_cat, col_scen, col_style = st.columns(4)
 
-col_lang, col_cat, col_scen, col_style = st.columns(4)
+    with col_lang:
+        st.caption("🌐 输出语言")
+        lang_options = list(LANGUAGES.keys())
+        language = st.selectbox("输出语言", lang_options, index=0, label_visibility="collapsed")
 
-with col_lang:
-    st.markdown("**🌐 输出语言**")
-    lang_options = list(LANGUAGES.keys())
-    language = st.selectbox("输出语言", lang_options, index=0, label_visibility="collapsed")
+    with col_cat:
+        st.caption("🎯 场景分类")
+        category_names = list(SCENARIO_CATEGORIES.keys())
+        selected_category = st.selectbox("场景分类", category_names, index=0, label_visibility="collapsed")
+        scenarios_in_cat = SCENARIO_CATEGORIES[selected_category]
+        scenario_labels = [s["label"] for s in scenarios_in_cat]
 
-with col_cat:
-    st.markdown("**🎯 场景分类**")
-    category_names = list(SCENARIO_CATEGORIES.keys())
-    selected_category = st.selectbox("场景分类", category_names, index=0, label_visibility="collapsed")
-    scenarios_in_cat = SCENARIO_CATEGORIES[selected_category]
-    scenario_labels = [s["label"] for s in scenarios_in_cat]
+    with col_scen:
+        st.caption("📄 具体场景")
+        selected_scenario_label = st.selectbox("具体场景", scenario_labels, index=0, label_visibility="collapsed")
+        selected_scenario = next(s for s in scenarios_in_cat if s["label"] == selected_scenario_label)
 
-with col_scen:
-    st.markdown("**📄 具体场景**")
-    selected_scenario_label = st.selectbox("具体场景", scenario_labels, index=0, label_visibility="collapsed")
-    selected_scenario = next(s for s in scenarios_in_cat if s["label"] == selected_scenario_label)
+    with col_style:
+        st.caption("✍️ 文章文风")
+        style_hint = selected_scenario.get("style_hint", "pain_story")
+        style_keys = list(ARTICLE_STYLES.keys())
+        hint_index = 0
+        for i, k in enumerate(style_keys):
+            if ARTICLE_STYLES[k]["id"] == style_hint:
+                hint_index = i
+                break
+        selected_style_key = st.selectbox(
+            "文风",
+            style_keys,
+            index=hint_index,
+            label_visibility="collapsed",
+            format_func=lambda k: f"{k}",
+        )
+        style_obj = ARTICLE_STYLES[selected_style_key]
 
-with col_style:
-    st.markdown("**✍️ 文章文风**")
-    style_hint = selected_scenario.get("style_hint", "pain_story")
-    style_keys = list(ARTICLE_STYLES.keys())
-    hint_index = 0
-    for i, k in enumerate(style_keys):
-        if ARTICLE_STYLES[k]["id"] == style_hint:
-            hint_index = i
-            break
-    selected_style_key = st.selectbox(
-        "文风",
-        style_keys,
-        index=hint_index,
+with st.container(border=True):
+    st.markdown("**💎 主打卖点 (可多选)**")
+    auto_sp = set(selected_scenario.get("selling_points", []))
+    if "sp_overrides" not in st.session_state:
+        st.session_state["sp_overrides"] = {}
+
+    selected_sp_ids: list[str] = []
+    sp_cols = st.columns(len(SELLING_POINT_GROUPS))
+    for i, (group_name, items) in enumerate(SELLING_POINT_GROUPS.items()):
+        with sp_cols[i]:
+            st.caption(f"{group_name}")
+            for sp_id, sp_label in items.items():
+                default_val = sp_id in auto_sp
+                override_key = f"sp_{sp_id}"
+                checked = st.checkbox(sp_label, value=default_val, key=override_key)
+                if checked:
+                    selected_sp_ids.append(sp_id)
+
+    selling_points_text = "、".join(
+        SP_ID_TO_LABEL.get(sid, sid) for sid in selected_sp_ids
+    ) if selected_sp_ids else "MPChat 全功能"
+
+with st.container(border=True):
+    st.markdown("**🔍 SEO 关键词**")
+    st.caption("点击预设快速填充，或手动编辑（将被自然植入文章正文，提升 SEO 表现）")
+
+    preset_cols = st.columns(len(KEYWORD_PRESETS))
+    for i, preset in enumerate(KEYWORD_PRESETS):
+        with preset_cols[i]:
+            if st.button(f"{preset['label']}", key=f"kw_preset_{i}", use_container_width=True):
+                st.session_state["keywords_val"] = preset["keywords"]
+
+    scenario_kw = selected_scenario.get("keywords", "")
+    default_kw = st.session_state.get("keywords_val", scenario_kw)
+
+    keywords = st.text_area(
+        "关键词（3-5个）",
+        value=default_kw,
+        height=60,
         label_visibility="collapsed",
-        format_func=lambda k: f"{k}",
     )
-    style_obj = ARTICLE_STYLES[selected_style_key]
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-st.markdown('<div class="sv-card">', unsafe_allow_html=True)
-st.markdown('<div class="sv-title">💎 主打卖点 (可多选)</div>', unsafe_allow_html=True)
-
-auto_sp = set(selected_scenario.get("selling_points", []))
-if "sp_overrides" not in st.session_state:
-    st.session_state["sp_overrides"] = {}
-
-selected_sp_ids: list[str] = []
-sp_cols = st.columns(len(SELLING_POINT_GROUPS))
-for i, (group_name, items) in enumerate(SELLING_POINT_GROUPS.items()):
-    with sp_cols[i]:
-        st.markdown(f"**{group_name}**")
-        for sp_id, sp_label in items.items():
-            default_val = sp_id in auto_sp
-            override_key = f"sp_{sp_id}"
-            checked = st.checkbox(sp_label, value=default_val, key=override_key)
-            if checked:
-                selected_sp_ids.append(sp_id)
-
-selling_points_text = "、".join(
-    SP_ID_TO_LABEL.get(sid, sid) for sid in selected_sp_ids
-) if selected_sp_ids else "MPChat 全功能"
-st.markdown('</div>', unsafe_allow_html=True)
-
-st.markdown('<div class="sv-card">', unsafe_allow_html=True)
-st.markdown('<div class="sv-title">🔍 SEO 关键词</div>', unsafe_allow_html=True)
-st.caption("点击预设快速填充，或手动编辑（将被自然植入文章正文，提升 SEO 表现）")
-
-preset_cols = st.columns(len(KEYWORD_PRESETS))
-for i, preset in enumerate(KEYWORD_PRESETS):
-    with preset_cols[i]:
-        if st.button(f"{preset['label']}", key=f"kw_preset_{i}", use_container_width=True):
-            st.session_state["keywords_val"] = preset["keywords"]
-
-scenario_kw = selected_scenario.get("keywords", "")
-default_kw = st.session_state.get("keywords_val", scenario_kw)
-
-keywords = st.text_area(
-    "关键词（3-5个）",
-    value=default_kw,
-    height=60,
-    label_visibility="collapsed",
-)
-st.markdown('</div>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 生成按钮

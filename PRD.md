@@ -308,21 +308,21 @@ MPChat-软文机器人/
 ### 10.1 视觉语言重塑 (Visual Language)
 
 - **极简主义主题 (Minimalist Theme)**：
-  - 采用高对比度、低饱和度的色彩规范（如 Vercel 的黑白灰体系，或 Stripe 的克制亮色）。
-  - 通过 `.streamlit/config.toml` 配置全局主题：`primaryColor="#000000"`, `backgroundColor="#FFFFFF"`, `secondaryBackgroundColor="#F7F9fa"`, `textColor="#111827"`。
+  - 采用高对比度、低饱和度的色彩规范（如 Vercel 的黑白灰体系）。
+  - 通过 `.streamlit/config.toml` 配置全局主题：`primaryColor="#000000"`, `backgroundColor="#FFFFFF"`, `secondaryBackgroundColor="#FAFAFA"`, `textColor="#111827"`。
 - **排版升级 (Typography)**：
-  - 全局字体替换为 **Inter** 或 **Roboto**（通过 CSS `@import` 引入），增强现代感与可读性。
-  - 严格控制字号层级，加大 H1/H2 的留白，弱化辅助说明文字（使用浅灰色）。
+  - 全局字体替换为 **Inter**（通过 CSS `@import` 引入），增强现代感与可读性。
 - **沉浸式体验 (Immersion)**：
   - 注入 CSS 隐藏 Streamlit 原生的汉堡菜单 (`#MainMenu`)、底部水印 (`footer`) 和顶部装饰红线，打造纯净的独立 App 观感。
 
 ### 10.2 布局与空间管理 (Layout & Spacing)
 
-- **卡片式容器 (Card-based UI)**：
-  - 利用 `st.container()` 配合自定义 CSS 类，将功能模块（如「参数配置」、「SEO/GEO 面板」）包裹在带有细微阴影 (Box-shadow) 和圆角 (`border-radius: 12px`) 的白底卡片中，打破原生 Streamlit 扁平乏味的堆砌感。
+- **原生卡片式容器 (Native Card UI)**：
+  - **严禁使用 HTML `<div>` 强行包裹 Streamlit 组件**（这会导致 Streamlit 渲染树崩溃，出现点击选项后组件消失的 Bug）。
+  - 统一采用 Streamlit 1.30+ 原生的 `with st.container(border=True):` 来构建卡片，完美适配 Vercel 风格的浅灰色边框和细微阴影。
 - **侧边栏瘦身与重组 (Sidebar Optimization)**：
-  - **侧边栏仅保留全局/底层设置**：如 AI 服务商选择、API Key 填写、系统状态监控。
-  - **主操作区移至中台**：将「写作场景」、「主打卖点」、「语言选择」等高频操作移至主界面的核心卡片区，使用 `st.columns()` 进行多列紧凑排版，减少用户视线在左右之间的频繁跳跃。
+  - **侧边栏仅保留全局/底层设置**：如 AI 服务商选择、API Key 填写、图库配置、多平台分发 API。使用 `st.expander` 进行收纳。
+  - **主操作区移至中台**：将「写作场景」、「主打卖点」、「语言选择」等高频操作移至主界面的核心卡片区，使用 `st.columns()` 进行多列紧凑排版。
 - **渐进式披露 (Progressive Disclosure)**：
   - 遵循「如无必要，勿增实体」原则。将「温度设置」、「备用图库 Key」、「自定义 Prompt」等低频高级选项，收纳进 `st.expander("⚙️ Advanced Settings")` 中，保持界面清爽。
 
