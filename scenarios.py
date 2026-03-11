@@ -307,6 +307,48 @@ SCENARIO_CATEGORIES = {
             "pixabay_terms": ["comparison chart", "cryptocurrency coin"],
         },
     ],
+    "⚔️ 竞品对比": [
+        {
+            "label": "MPChat vs Telegram 全面对比",
+            "audience_tag": "加密社交用户",
+            "keywords": "MPChat vs Telegram, 加密聊天对比, 安全通讯App对比, Web3社交比较",
+            "selling_points": ["e2ee", "crypto_red_packet", "p2p_transfer", "group_mgmt"],
+            "style_hint": "review",
+            "pixabay_terms": ["comparison versus", "mobile messaging app"],
+        },
+        {
+            "label": "MP Card vs Binance Card 加密卡评测",
+            "audience_tag": "加密卡用户",
+            "keywords": "MP Card vs Binance Card, 加密信用卡对比, 虚拟卡比较, 币圈信用卡评测",
+            "selling_points": ["virtual_card", "physical_card", "instant_settlement", "multi_currency"],
+            "style_hint": "review",
+            "pixabay_terms": ["credit card comparison", "payment card"],
+        },
+        {
+            "label": "MPChat vs Trust Wallet 钱包对比",
+            "audience_tag": "钱包用户",
+            "keywords": "MPChat vs Trust Wallet, 加密钱包对比, 多功能钱包比较, Web3钱包评测",
+            "selling_points": ["non_custodial", "dex_integration", "compliance", "custody"],
+            "style_hint": "review",
+            "pixabay_terms": ["digital wallet", "mobile payment"],
+        },
+        {
+            "label": "MPChat vs Signal 安全通讯对比",
+            "audience_tag": "隐私用户",
+            "keywords": "MPChat vs Signal, 安全通讯对比, E2EE聊天比较, 隐私App对比",
+            "selling_points": ["e2ee", "privacy_settings", "file_encryption", "p2p_transfer"],
+            "style_hint": "review",
+            "pixabay_terms": ["privacy security", "encrypted message"],
+        },
+        {
+            "label": "MP Card vs Crypto.com Card 对比",
+            "audience_tag": "加密消费者",
+            "keywords": "MP Card vs Crypto.com, 加密卡对比, Visa加密卡评测, 最佳加密信用卡",
+            "selling_points": ["virtual_card", "physical_card", "atm_withdrawal", "multi_currency"],
+            "style_hint": "review",
+            "pixabay_terms": ["visa card payment", "online shopping"],
+        },
+    ],
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -512,6 +554,16 @@ KEYWORD_PRESETS = [
     {
         "label": "加密隐私通讯",
         "keywords": "加密隐私通讯, E2EE聊天, 安全加密App, 隐私社交, encrypted messaging",
+        "difficulty": "low",
+    },
+    {
+        "label": "竞品对比",
+        "keywords": "MPChat对比, 加密卡对比, vs Telegram, vs Binance Card, best crypto app",
+        "difficulty": "medium",
+    },
+    {
+        "label": "Web3超级应用",
+        "keywords": "Web3超级应用, 加密货币全能App, 聊天支付一体, crypto super app",
         "difficulty": "low",
     },
 ]

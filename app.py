@@ -1,15 +1,21 @@
 """
-MPChat 智能软文生成器 v3.0
+MPChat 智能软文生成器 v3.1
 32+ 细分场景 · 25+ 卖点 · 7 种文风 · Pixabay 实图 · SEO 工具箱
+流式进度 · 批量生成 · 历史记录 · 文内配图 · A/B 标题 · 竞品对比
 """
 
 import os
+import io
+import re
 import json
 import time
+import zipfile
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import streamlit as st
 import requests
+import markdown as md_lib
 from bs4 import BeautifulSoup
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -289,6 +295,7 @@ def build_system_prompt(language: str, style_instruction: str,
   "seo_title": "文章 SEO 标题（50-60 字符，含核心关键词）",
   "meta_description": "元描述（120-160 字符，总结文章价值并含关键词）",
   "slug_suggestion": "url-friendly-slug-in-english",
+  "title_alternatives": ["备选标题1（不同角度）", "备选标题2（不同风格）", "备选标题3（不同卖点）"],
   "article": "完整文章正文（Markdown 格式，含 H1/H2/CTA）",
   "image_prompts": [
     {{
@@ -298,6 +305,11 @@ def build_system_prompt(language: str, style_instruction: str,
   ],
   "image_search_terms": ["英文Pixabay搜索词1", "英文搜索词2", "英文搜索词3"]
 }}
+
+【title_alternatives 规范】
+- 提供 3 个与主标题不同角度的备选标题，供 A/B 测试使用
+- 每个标题都要包含核心关键词，但切入角度不同（如：数据型、疑问型、利益型）
+- 长度同样控制在 50-60 字符
 
 【Image Prompt 规范】
 - 必须是纯英文
@@ -365,7 +377,6 @@ def generate_article(client, model, language, scenario_label, audience_tag,
         else:
             raw = inner.strip()
 
-    import re
     if not raw.startswith("{"):
         match = re.search(r'\{[\s\S]*\}', raw)
         if match:
@@ -389,11 +400,38 @@ def generate_article(client, model, language, scenario_label, audience_tag,
             }
 
 
+def insert_images_into_article(article_text: str, images: list[dict],
+                                max_inserts: int = 3) -> str:
+    """Insert Pixabay images into article after H2 headings."""
+    if not images:
+        return article_text
+    lines = article_text.split('\n')
+    h2_indices = [i for i, ln in enumerate(lines) if ln.strip().startswith('## ')]
+    if len(h2_indices) >= 2:
+        positions = h2_indices[1::2][:max_inserts]
+    elif h2_indices:
+        positions = [h2_indices[0]]
+    else:
+        return article_text
+    offset = 0
+    for idx, pos in enumerate(positions):
+        if idx >= len(images):
+            break
+        img = images[idx]
+        img_md = (
+            f"\n![{img['alt_text']}]({img['url']})\n"
+            f"*📷 {img['photographer']} via [Pixabay]({img['page_url']})*\n"
+        )
+        lines.insert(pos + 1 + offset, img_md)
+        offset += 1
+    return '\n'.join(lines)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Streamlit 页面配置 + 全局样式
 # ══════════════════════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="MPChat 智能软文生成器 v3.0",
+    page_title="MPChat 智能软文生成器 v3.1",
     page_icon="🌿",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -475,8 +513,8 @@ st.markdown("""
   <div><div style="font-size:2.2rem;">🌿</div></div>
   <div>
     <h1>MPChat 智能软文生成器</h1>
-    <p>32+ 场景 · 25+ 卖点 · 7 种文风 · Pixabay 实图 · SEO 工具箱</p>
-    <span class="mp-badge">v3.0 — Live with Crypto</span>
+    <p>32+ 场景 · 25+ 卖点 · 7 种文风 · Pixabay 实图 · SEO 工具箱 · 批量生成</p>
+    <span class="mp-badge">v3.1 — Live with Crypto</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -643,7 +681,7 @@ with st.sidebar:
     st.divider()
     st.markdown(
         "<div style='color:#4b5563;font-size:0.75rem;text-align:center;'>"
-        "MPChat 智能软文生成器 v3.0<br/>Live with Crypto 🌿</div>",
+        "MPChat 智能软文生成器 v3.1<br/>Live with Crypto 🌿</div>",
         unsafe_allow_html=True,
     )
 
@@ -668,8 +706,107 @@ with col_btn:
 
 st.divider()
 
+# ── 📦 批量生成 ──────────────────────────────────────────────────────────────
+with st.expander("📦 批量生成模式", expanded=False):
+    st.caption("选择多个场景一次性生成，完成后打包下载")
+    _all_scenario_opts: list[str] = []
+    _scenario_lookup: dict[str, dict] = {}
+    for _cat_name, _scenarios_list in SCENARIO_CATEGORIES.items():
+        for _s in _scenarios_list:
+            _lbl = f"{_cat_name}  {_s['label']}"
+            _all_scenario_opts.append(_lbl)
+            _scenario_lookup[_lbl] = _s
+    batch_selected = st.multiselect(
+        "选择场景（可多选）", _all_scenario_opts,
+        placeholder="点击选择要批量生成的场景...",
+    )
+    batch_btn = st.button(
+        "🚀 批量生成", disabled=not batch_selected,
+        use_container_width=True, key="batch_gen_btn",
+    )
+    if batch_btn and batch_selected:
+        if not api_key_input.strip():
+            st.error("❌ 请在左侧填写 API Key。")
+        else:
+            batch_results: list[dict] = []
+            with st.status(
+                f"📦 批量生成中（共 {len(batch_selected)} 篇）...",
+                expanded=True,
+            ) as bstatus:
+                bclient = get_client(api_key_input, base_url_input)
+                bweb = ""
+                if use_web:
+                    st.write("🌐 抓取网络资料...")
+                    bweb, _ = fetch_web_knowledge()
+                bmodel = model_input.strip() if model_input else "gemini-2.5-flash"
+                for bi, blabel in enumerate(batch_selected):
+                    bsc = _scenario_lookup[blabel]
+                    st.write(f"📝 [{bi + 1}/{len(batch_selected)}] {bsc['label']}...")
+                    bsp_text = "、".join(
+                        SP_ID_TO_LABEL.get(sid, sid)
+                        for sid in bsc.get("selling_points", [])
+                    ) or "MPChat 全功能"
+                    bstyle_hint = bsc.get("style_hint", "pain_story")
+                    bstyle_key = next(
+                        (k for k, v in ARTICLE_STYLES.items()
+                         if v["id"] == bstyle_hint),
+                        list(ARTICLE_STYLES.keys())[0],
+                    )
+                    bstyle_obj = ARTICLE_STYLES[bstyle_key]
+                    try:
+                        br = generate_article(
+                            client=bclient, model=bmodel, language=language,
+                            scenario_label=bsc["label"],
+                            audience_tag=bsc.get("audience_tag", ""),
+                            selling_points_text=bsp_text,
+                            style_name=bstyle_key,
+                            style_instruction=bstyle_obj["instruction"],
+                            keywords=bsc.get("keywords", ""),
+                            web_content=bweb,
+                        )
+                        batch_results.append(
+                            {"scenario": bsc, "result": br, "ok": True}
+                        )
+                    except Exception as be:
+                        batch_results.append(
+                            {"scenario": bsc, "error": str(be), "ok": False}
+                        )
+                ok_cnt = sum(1 for x in batch_results if x["ok"])
+                bstatus.update(
+                    label=f"✅ 批量完成 {ok_cnt}/{len(batch_results)} 篇",
+                    state="complete",
+                )
+            st.session_state["batch_results"] = batch_results
+
+    if st.session_state.get("batch_results"):
+        bresults = st.session_state["batch_results"]
+        for bi, br in enumerate(bresults):
+            if br["ok"]:
+                btitle = br["result"].get("seo_title", br["scenario"]["label"])
+                with st.expander(f"✅ {btitle}", expanded=False):
+                    st.markdown(br["result"].get("article", "")[:800] + "...")
+            else:
+                st.error(f"❌ {br['scenario']['label']}: {br['error']}")
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for br in bresults:
+                if br["ok"]:
+                    bslug = br["result"].get("slug_suggestion", "article")
+                    bcontent = (
+                        f"# {br['result'].get('seo_title', '')}\n\n"
+                        f"> {br['result'].get('meta_description', '')}"
+                        f"\n\n---\n\n"
+                        f"{br['result'].get('article', '')}"
+                    )
+                    zf.writestr(f"{bslug}.md", bcontent.encode("utf-8"))
+        st.download_button(
+            f"📥 下载全部 {sum(1 for x in bresults if x['ok'])} 篇 (ZIP)",
+            zip_buf.getvalue(), "mpchat-batch.zip", "application/zip",
+            use_container_width=True, key="batch_download",
+        )
+
 # ══════════════════════════════════════════════════════════════════════════════
-# 生成逻辑
+# 单篇生成逻辑
 # ══════════════════════════════════════════════════════════════════════════════
 if generate_btn:
     if not api_key_input.strip():
@@ -679,22 +816,19 @@ if generate_btn:
         st.warning("⚠️ 请至少选择一个主打卖点。")
         st.stop()
 
-    web_content = ""
-    web_status = []
-    if use_web:
-        with st.spinner("🌐 正在并行抓取全网资料（约 3-5 秒）..."):
+    with st.status("🚀 正在生成高质量软文...", expanded=True) as gen_status:
+        web_content = ""
+        web_status = []
+        if use_web:
+            st.write("🌐 正在并行抓取全网资料（10 个来源）...")
             web_content, web_status = fetch_web_knowledge()
-        ok_count = sum(1 for s in web_status if s["ok"])
-        total = len(web_status)
-        color = "#00c853" if ok_count >= total * 0.6 else "#f59e0b"
-        st.markdown(
-            f"<div style='font-size:0.8rem;color:{color};'>"
-            f"{'✅' if ok_count >= total * 0.6 else '⚠️'} "
-            f"网络抓取完成：成功 {ok_count} / {total} 个来源</div>",
-            unsafe_allow_html=True,
-        )
+            ok_count = sum(1 for s in web_status if s["ok"])
+            st.write(
+                f"{'✅' if ok_count >= len(web_status) * 0.6 else '⚠️'} "
+                f"网络抓取完成：{ok_count}/{len(web_status)} 个来源"
+            )
 
-    with st.spinner("🤖 AI 正在撰写中，请稍候（约 15-30 秒）..."):
+        st.write("🤖 AI 正在撰写文章（约 15-30 秒）...")
         try:
             client = get_client(api_key_input, base_url_input)
             result = generate_article(
@@ -714,6 +848,7 @@ if generate_btn:
             st.session_state["last_keywords"] = keywords
             st.session_state["last_sp_ids"] = selected_sp_ids
             st.session_state["last_scenario"] = selected_scenario
+            st.write("✅ 文章生成完成")
 
         except json.JSONDecodeError:
             st.error("❌ AI 返回格式异常，无法解析 JSON。请重试。")
@@ -730,10 +865,8 @@ if generate_btn:
                 st.error(f"❌ 生成失败：{err}")
             st.stop()
 
-    st.success("✅ 生成完成！")
-
-    if use_pixabay and pixabay_key:
-        with st.spinner("🖼️ 正在从 Pixabay 获取配图..."):
+        if use_pixabay and pixabay_key:
+            st.write("🖼️ 正在从 Pixabay 获取配图...")
             scenario_terms = st.session_state["last_scenario"].get("pixabay_terms", [])
             ai_terms = result.get("image_search_terms", [])
             pixabay_images = fetch_images_for_article(
@@ -743,8 +876,26 @@ if generate_btn:
                 per_query=2,
             )
             st.session_state["last_pixabay"] = pixabay_images
-    else:
-        st.session_state["last_pixabay"] = []
+            st.write(f"✅ 获取 {len(pixabay_images)} 张配图")
+        else:
+            st.session_state["last_pixabay"] = []
+
+        if "generation_history" not in st.session_state:
+            st.session_state["generation_history"] = []
+        st.session_state["generation_history"].insert(0, {
+            "timestamp": datetime.now().strftime("%m/%d %H:%M"),
+            "scenario": selected_scenario_label,
+            "title": result.get("seo_title", ""),
+            "result": dict(result),
+            "language": language,
+            "keywords": keywords,
+            "pixabay_images": list(st.session_state.get("last_pixabay", [])),
+        })
+        if len(st.session_state["generation_history"]) > 20:
+            st.session_state["generation_history"] = \
+                st.session_state["generation_history"][:20]
+
+        gen_status.update(label="✅ 生成完成！", state="complete")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -773,6 +924,18 @@ if "last_result" in st.session_state:
 
     st.markdown(f"**🔗 URL Slug:** `/{slug}`")
 
+    title_alts = result.get("title_alternatives", [])
+    if title_alts:
+        st.markdown("**🔀 A/B 备选标题**")
+        for ti, alt_title in enumerate(title_alts):
+            tcol_text, tcol_btn = st.columns([5, 1])
+            with tcol_text:
+                st.markdown(f"`{alt_title}` ({len(alt_title)} 字符)")
+            with tcol_btn:
+                if st.button("采用", key=f"use_alt_title_{ti}"):
+                    st.session_state["last_result"]["seo_title"] = alt_title
+                    st.rerun()
+
     with st.expander("📋 复制 SEO 元数据"):
         st.code(
             f"Title:\n{seo_title}\n\nMeta Description:\n{meta_desc}\n\nSlug:\n/{slug}",
@@ -785,26 +948,54 @@ if "last_result" in st.session_state:
     st.markdown('<div class="output-card-title">📄 模块 B — 正文内容</div>',
                 unsafe_allow_html=True)
     article = result.get("article", "（未生成）")
-    st.markdown(article)
+
+    pixabay_images_for_insert = st.session_state.get("last_pixabay", [])
+    if pixabay_images_for_insert:
+        article_with_images = insert_images_into_article(
+            article, pixabay_images_for_insert
+        )
+    else:
+        article_with_images = article
+    st.markdown(article_with_images)
 
     export_col1, export_col2, export_col3 = st.columns(3)
     with export_col1:
         st.download_button(
             "📥 导出 Markdown",
-            data=f"# {seo_title}\n\n> {meta_desc}\n\n---\n\n{article}",
+            data=f"# {seo_title}\n\n> {meta_desc}\n\n---\n\n{article_with_images}",
             file_name=f"{slug or 'mpchat-article'}.md",
             mime="text/markdown",
             use_container_width=True,
         )
     with export_col2:
-        html_content = f"""<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="UTF-8">
-<meta name="description" content="{meta_desc}">
-<title>{seo_title}</title>
-<style>body{{font-family:system-ui,sans-serif;max-width:800px;margin:0 auto;padding:40px 20px;line-height:1.8;color:#1a1a1a}}h1{{color:#00c853}}h2{{color:#0d2137;border-bottom:2px solid #00c85330;padding-bottom:8px}}a{{color:#00c853}}</style>
-</head><body>
-{article.replace(chr(10), '<br>')}
-</body></html>"""
+        html_body = md_lib.markdown(
+            article_with_images,
+            extensions=["tables", "fenced_code"],
+        )
+        html_content = (
+            "<!DOCTYPE html>\n"
+            '<html lang="zh-CN"><head><meta charset="UTF-8">\n'
+            f'<meta name="description" content="{meta_desc}">\n'
+            f"<title>{seo_title}</title>\n"
+            "<style>"
+            "body{font-family:system-ui,sans-serif;max-width:800px;"
+            "margin:0 auto;padding:40px 20px;line-height:1.8;color:#1a1a1a}"
+            "h1{color:#00c853}"
+            "h2{color:#0d2137;border-bottom:2px solid #00c85330;padding-bottom:8px}"
+            "a{color:#00c853}"
+            "img{max-width:100%;height:auto;border-radius:8px;margin:16px 0}"
+            "table{border-collapse:collapse;width:100%}"
+            "th,td{border:1px solid #ddd;padding:8px 12px}"
+            "th{background:#f5f5f5}"
+            "blockquote{border-left:4px solid #00c853;padding-left:16px;"
+            "color:#555;margin:16px 0}"
+            "code{background:#f0f0f0;padding:2px 6px;border-radius:4px}"
+            "pre{background:#1e1e1e;color:#d4d4d4;padding:16px;border-radius:8px;"
+            "overflow-x:auto}"
+            "</style>\n</head><body>\n"
+            f"{html_body}\n"
+            "</body></html>"
+        )
         st.download_button(
             "📥 导出 HTML",
             data=html_content,
@@ -828,7 +1019,7 @@ if "last_result" in st.session_state:
         )
 
     with st.expander("📋 复制 Markdown 源码"):
-        st.code(article, language="markdown")
+        st.code(article_with_images, language="markdown")
 
     st.divider()
 
@@ -1016,7 +1207,36 @@ else:
         在左侧选择写作场景和参数，点击「🚀 生成高质量软文」开始创作
     </div>
     <div style="font-size:0.85rem; color:#374151;">
-        32+ 细分场景 · 7 种文风 · Pixabay 实图 · SEO 工具箱
+        32+ 细分场景 · 7 种文风 · Pixabay 实图 · SEO 工具箱 · 批量生成 · A/B 标题
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 历史记录
+# ══════════════════════════════════════════════════════════════════════════════
+if st.session_state.get("generation_history"):
+    st.divider()
+    history = st.session_state["generation_history"]
+    with st.expander(f"📜 生成历史（{len(history)} 篇）", expanded=False):
+        for hi, hitem in enumerate(history):
+            hcol_info, hcol_btn = st.columns([5, 1])
+            with hcol_info:
+                st.markdown(
+                    f"**{hitem['title'][:50]}** · "
+                    f"{hitem['scenario']} · "
+                    f"{hitem['timestamp']}"
+                )
+            with hcol_btn:
+                if st.button("加载", key=f"load_history_{hi}"):
+                    st.session_state["last_result"] = hitem["result"]
+                    st.session_state["last_pixabay"] = hitem.get(
+                        "pixabay_images", []
+                    )
+                    st.session_state["last_keywords"] = hitem.get("keywords", "")
+                    st.session_state["last_language"] = hitem.get("language", "中文")
+                    st.rerun()
+        if len(history) > 1:
+            if st.button("🗑️ 清空历史", key="clear_history"):
+                st.session_state["generation_history"] = []
+                st.rerun()
