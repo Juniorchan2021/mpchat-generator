@@ -1,11 +1,12 @@
 """
-MPChat 智能软文生成器
-基于 MPChat 产品知识库，自动生成 SEO 优化软文 + AI 配图 Prompt
+MPChat 智能软文生成器 v2.0
+基于 MPChat 产品知识库 + 全网实时资料，自动生成 SEO 优化软文 + AI 配图 Prompt
 """
 
 import os
 import json
 import time
+import xml.etree.ElementTree as ET
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
@@ -14,6 +15,66 @@ from dotenv import load_dotenv
 
 # ── 环境变量 ──────────────────────────────────────────────────────────────────
 load_dotenv()
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🔧  AI 服务商预设配置
+# ══════════════════════════════════════════════════════════════════════════════
+PROVIDERS = {
+    "🟢 Google Gemini（免费推荐）": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "models": ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash-001"],
+        "key_prefix": "AIzaSy...",
+        "get_key_url": "https://aistudio.google.com/apikey",
+    },
+    "🔵 OpenAI": {
+        "base_url": "https://api.openai.com/v1",
+        "models": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
+        "key_prefix": "sk-...",
+        "get_key_url": "https://platform.openai.com/api-keys",
+    },
+    "🟣 DeepSeek（高性价比）": {
+        "base_url": "https://api.deepseek.com/v1",
+        "models": ["deepseek-chat", "deepseek-reasoner"],
+        "key_prefix": "sk-...",
+        "get_key_url": "https://platform.deepseek.com/api_keys",
+    },
+    "🟡 Kimi（月之暗面）": {
+        "base_url": "https://api.moonshot.cn/v1",
+        "models": ["moonshot-v1-128k", "moonshot-v1-32k", "moonshot-v1-8k"],
+        "key_prefix": "sk-...",
+        "get_key_url": "https://platform.moonshot.cn/console/api-keys",
+    },
+    "🟠 OpenRouter（支持全部模型）": {
+        "base_url": "https://openrouter.ai/api/v1",
+        "models": [
+            "anthropic/claude-sonnet-4",
+            "google/gemini-2.5-flash",
+            "openai/gpt-4o",
+            "deepseek/deepseek-chat",
+        ],
+        "key_prefix": "sk-or-...",
+        "get_key_url": "https://openrouter.ai/keys",
+    },
+    "⚙️ 自定义（手动填写）": {
+        "base_url": "",
+        "models": [],
+        "key_prefix": "",
+        "get_key_url": "",
+    },
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🌍  网络资料源配置
+# ══════════════════════════════════════════════════════════════════════════════
+HTTP_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
+}
 
 # ── 页面配置 ──────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -26,149 +87,63 @@ st.set_page_config(
 # ── 全局样式 ──────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-/* 主色调：MPChat 品牌绿 */
-:root {
-    --mp-green: #00c853;
-    --mp-dark: #0a1628;
-    --mp-card: #111827;
-}
-
-/* 顶部 Banner */
+:root { --mp-green: #00c853; --mp-dark: #0a1628; --mp-card: #111827; }
 .mp-banner {
     background: linear-gradient(135deg, #0a1628 0%, #0d2137 50%, #0a2e1a 100%);
-    border: 1px solid #00c85330;
-    border-radius: 12px;
-    padding: 24px 32px;
-    margin-bottom: 24px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
+    border: 1px solid #00c85330; border-radius: 12px;
+    padding: 24px 32px; margin-bottom: 24px;
+    display: flex; align-items: center; gap: 16px;
 }
-.mp-banner h1 {
-    color: #ffffff;
-    font-size: 1.8rem;
-    font-weight: 700;
-    margin: 0;
-}
-.mp-banner p {
-    color: #a0aec0;
-    font-size: 0.9rem;
-    margin: 4px 0 0 0;
-}
+.mp-banner h1 { color: #fff; font-size: 1.8rem; font-weight: 700; margin: 0; }
+.mp-banner p  { color: #a0aec0; font-size: 0.9rem; margin: 4px 0 0 0; }
 .mp-badge {
-    background: #00c85320;
-    border: 1px solid #00c853;
-    color: #00c853;
-    border-radius: 20px;
-    padding: 3px 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    display: inline-block;
-    margin-top: 6px;
-}
-
-/* 输出卡片 */
-.output-card {
-    background: #111827;
-    border: 1px solid #1f2937;
-    border-radius: 12px;
-    padding: 20px 24px;
-    margin-bottom: 16px;
+    background: #00c85320; border: 1px solid #00c853; color: #00c853;
+    border-radius: 20px; padding: 3px 12px; font-size: 0.75rem;
+    font-weight: 600; display: inline-block; margin-top: 6px;
 }
 .output-card-title {
-    color: #00c853;
-    font-size: 0.85rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 12px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    color: #00c853; font-size: 0.85rem; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
 }
 .seo-title-box {
-    background: #00c85310;
-    border-left: 3px solid #00c853;
-    border-radius: 0 8px 8px 0;
-    padding: 12px 16px;
-    color: #e2e8f0;
-    font-size: 1.05rem;
-    font-weight: 600;
-    margin-bottom: 8px;
+    background: #00c85310; border-left: 3px solid #00c853;
+    border-radius: 0 8px 8px 0; padding: 12px 16px;
+    color: #e2e8f0; font-size: 1.05rem; font-weight: 600; margin-bottom: 8px;
 }
 .seo-desc-box {
-    background: #1e293b;
-    border-radius: 8px;
-    padding: 10px 14px;
-    color: #94a3b8;
-    font-size: 0.88rem;
-    line-height: 1.6;
+    background: #1e293b; border-radius: 8px; padding: 10px 14px;
+    color: #94a3b8; font-size: 0.88rem; line-height: 1.6;
 }
 .image-prompt-block {
-    background: #0f172a;
-    border: 1px solid #1e3a5f;
-    border-radius: 8px;
-    padding: 14px 16px;
-    margin-bottom: 10px;
-    font-family: 'Courier New', monospace;
-    font-size: 0.8rem;
-    color: #7dd3fc;
-    line-height: 1.7;
+    background: #0f172a; border: 1px solid #1e3a5f; border-radius: 8px;
+    padding: 14px 16px; margin-bottom: 10px;
+    font-family: 'Courier New', monospace; font-size: 0.8rem;
+    color: #7dd3fc; line-height: 1.7;
 }
-.image-prompt-label {
-    color: #38bdf8;
-    font-weight: 700;
-    font-size: 0.78rem;
-    margin-bottom: 4px;
-    display: block;
-}
-.image-prompt-cn {
-    color: #64748b;
-    font-family: inherit;
-    font-size: 0.78rem;
-    margin-top: 6px;
-    padding-top: 6px;
-    border-top: 1px solid #1e293b;
-}
-
-/* 侧边栏美化 */
-[data-testid="stSidebar"] {
-    background: #0d1117;
-}
+.image-prompt-label { color: #38bdf8; font-weight: 700; font-size: 0.78rem; margin-bottom: 4px; display: block; }
+.image-prompt-cn { color: #64748b; font-size: 0.78rem; margin-top: 6px; padding-top: 6px; border-top: 1px solid #1e293b; }
+[data-testid="stSidebar"] { background: #0d1117; }
 [data-testid="stSidebar"] .stMarkdown h3 {
-    color: #00c853;
-    font-size: 0.8rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    color: #00c853; font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase;
 }
-
-/* 生成按钮 */
 .stButton > button {
     background: linear-gradient(135deg, #00c853, #00a844);
-    color: white;
-    font-weight: 700;
-    font-size: 1rem;
-    border: none;
-    border-radius: 10px;
-    padding: 14px 0;
-    width: 100%;
-    transition: all 0.2s;
+    color: white; font-weight: 700; font-size: 1rem; border: none;
+    border-radius: 10px; padding: 14px 0; width: 100%; transition: all 0.2s;
 }
 .stButton > button:hover {
     background: linear-gradient(135deg, #00e064, #00c853);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 20px #00c85340;
+    transform: translateY(-1px); box-shadow: 0 4px 20px #00c85340;
 }
-
-/* 分隔线 */
 hr { border-color: #1f2937; }
-
-/* 隐藏 Streamlit 默认 footer */
 footer { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── 读取知识库 ─────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# 📚  知识库加载
+# ══════════════════════════════════════════════════════════════════════════════
 @st.cache_data
 def load_knowledge():
     kb_path = os.path.join(os.path.dirname(__file__), "knowledge.txt")
@@ -177,91 +152,153 @@ def load_knowledge():
             return f.read()
     return ""
 
-# ── 网络抓取：从官网/博客获取最新信息 ───────────────────────────────────────────
-WEB_SOURCES = [
-    {"url": "https://mp.net/",              "label": "官网首页"},
-    {"url": "https://mp.net/crypto-wallet", "label": "MP Wallet 页面"},
-]
-MEDIUM_ARTICLES = [
-    "https://medium.com/@mpchat_blog/ultimate-guide-how-to-pay-for-chatgpt-plus-and-ai-services-using-mpchat-virtual-card-be354ab96596",
-    "https://medium.com/@mpchat_blog/how-to-subscribe-to-chatgpt-midjourney-with-a-virtual-crypto-card-befbe0184cf6",
-    "https://medium.com/@mpchat_blog/more-than-just-chat-how-im-reconstructs-commercial-payment-flows-and-closes-the-deal-fdac20274496",
-    "https://medium.com/@mpchat_blog/stablecoins-and-the-new-era-of-financial-sovereignty-3ca1b78cff3a",
-]
-PRESS_RELEASES = [
-    "https://www.globenewswire.com/news-release/2025/10/27/3174941/0/en/MPChat-Announces-Binance-Pay-Integration-Unlocking-a-New-Era-of-Seamless-Crypto-Top-Ups-for-Global-Users.html",
-    "https://www.globenewswire.com/news-release/2025/10/17/3168907/0/en/MPChat-Publishes-The-Fourth-Covenant-Manifesto-to-Redefine-Digital-Freedom-with-Integrated-Crypto-Communication-and-Payment-Tools.html",
-]
+KNOWLEDGE = load_knowledge()
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/122.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "en-US,en;q=0.9,zh-CN;q=0.8",
-}
-
-def _fetch_text(url: str, max_chars: int = 3000) -> str:
-    """抓取单个 URL，返回清洁后的正文文本。"""
+# ══════════════════════════════════════════════════════════════════════════════
+# 🌐  网络抓取引擎
+# ══════════════════════════════════════════════════════════════════════════════
+def _fetch_html(url: str, max_chars: int = 3000) -> str:
+    """抓取普通网页，清洗后返回正文。"""
     try:
-        r = requests.get(url, headers=HEADERS, timeout=10)
+        r = requests.get(url, headers=HTTP_HEADERS, timeout=12,
+                         allow_redirects=True)
         r.raise_for_status()
         soup = BeautifulSoup(r.text, "html.parser")
-        # 移除无用标签
         for tag in soup(["script", "style", "nav", "footer", "header",
-                          "aside", "form", "noscript", "svg", "img"]):
+                          "aside", "form", "noscript", "svg", "img", "iframe"]):
             tag.decompose()
         text = soup.get_text(separator="\n", strip=True)
-        # 去掉空行
-        lines = [l.strip() for l in text.splitlines() if l.strip()]
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
         return "\n".join(lines)[:max_chars]
     except Exception as e:
-        return f"[抓取失败: {url} — {e}]"
+        return f"[抓取失败: {e}]"
 
-@st.cache_data(ttl=3600, show_spinner=False)   # 缓存 1 小时
+
+def _fetch_medium_rss(max_items: int = 5, max_chars: int = 3000) -> str:
+    """通过 RSS Feed 抓取 Medium 博客文章摘要。"""
+    rss_url = "https://medium.com/feed/@mpchat_blog"
+    try:
+        r = requests.get(rss_url, headers=HTTP_HEADERS, timeout=12)
+        r.raise_for_status()
+        root = ET.fromstring(r.text)
+        items = root.findall(".//item")[:max_items]
+        parts = []
+        for item in items:
+            title = item.findtext("title", "")
+            desc_raw = item.findtext("description", "")
+            soup = BeautifulSoup(desc_raw, "html.parser")
+            desc = soup.get_text(strip=True)[:500]
+            parts.append(f"📝 {title}\n{desc}")
+        return "\n\n".join(parts)[:max_chars]
+    except Exception as e:
+        return f"[抓取失败: {e}]"
+
+
+def _fetch_search(engine: str, query: str, max_chars: int = 2500) -> str:
+    """抓取搜索引擎结果页。"""
+    if engine == "google":
+        url = f"https://www.google.com/search?q={requests.utils.quote(query)}&num=8&hl=zh-CN"
+    elif engine == "baidu":
+        url = f"https://www.baidu.com/s?wd={requests.utils.quote(query)}&rn=8"
+    elif engine == "duckduckgo":
+        url = f"https://html.duckduckgo.com/html/?q={requests.utils.quote(query)}"
+    else:
+        return "[不支持的搜索引擎]"
+    try:
+        headers = {**HTTP_HEADERS}
+        if engine == "google":
+            headers["Accept-Language"] = "zh-CN,zh;q=0.9,en;q=0.8"
+        r = requests.get(url, headers=headers, timeout=12, allow_redirects=True)
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "footer", "header",
+                          "aside", "form", "noscript", "svg", "img", "iframe"]):
+            tag.decompose()
+        text = soup.get_text(separator="\n", strip=True)
+        lines = [ln.strip() for ln in text.splitlines()
+                 if ln.strip() and len(ln.strip()) > 15]
+        return "\n".join(lines)[:max_chars]
+    except Exception as e:
+        return f"[抓取失败: {e}]"
+
+
+def _fetch_nitter_twitter(max_chars: int = 2000) -> str:
+    """尝试通过 Nitter 镜像抓取 MPChat 推文。"""
+    nitter_instances = [
+        "https://nitter.net/MPChatApp",
+        "https://nitter.privacydev.net/MPChatApp",
+        "https://nitter.poast.org/MPChatApp",
+    ]
+    for nitter_url in nitter_instances:
+        try:
+            r = requests.get(nitter_url, headers=HTTP_HEADERS, timeout=8,
+                             allow_redirects=True)
+            if r.status_code == 200:
+                soup = BeautifulSoup(r.text, "html.parser")
+                tweets = soup.select(".tweet-content, .timeline-item .tweet-body")
+                if tweets:
+                    parts = [t.get_text(strip=True)[:300] for t in tweets[:10]]
+                    return "\n\n".join(parts)[:max_chars]
+        except Exception:
+            continue
+    return "[抓取失败: Twitter/X 暂不可直接抓取]"
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def fetch_web_knowledge() -> tuple[str, list[dict]]:
     """
-    抓取 mp.net、Medium 博客、新闻稿，返回 (合并文本, 状态列表)。
+    抓取全网 MPChat 资料，返回 (合并文本, 状态列表)。
     """
+    tasks = [
+        ("🌐 官网 mp.net", lambda: _fetch_html("https://mp.net/", 3000)),
+        ("💰 MP Wallet 页面", lambda: _fetch_html("https://mp.net/crypto-wallet", 2500)),
+        ("💬 MP Chat 页面", lambda: _fetch_html("https://mp.net/crypto-chat", 2500)),
+        ("💳 MP Card 页面", lambda: _fetch_html("https://mp.net/crypto-card", 2500)),
+        ("📝 Medium 博客 (RSS)", lambda: _fetch_medium_rss(5, 3000)),
+        ("🐦 Twitter @MPChatApp", lambda: _fetch_nitter_twitter(2000)),
+        ("🔍 Google 搜索", lambda: _fetch_search("google", "MPChat mp.net crypto card stablecoin payment", 2500)),
+        ("🔍 百度搜索", lambda: _fetch_search("baidu", "MPChat mp.net 加密支付卡 稳定币", 2500)),
+        ("🔍 DuckDuckGo 搜索", lambda: _fetch_search("duckduckgo", "MPChat mp.net crypto card payment wallet", 2500)),
+        ("📰 GlobeNewswire 新闻稿",
+         lambda: _fetch_html(
+             "https://www.globenewswire.com/news-release/2025/10/27/3174941/0/en/"
+             "MPChat-Announces-Binance-Pay-Integration-Unlocking-a-New-Era-of-"
+             "Seamless-Crypto-Top-Ups-for-Global-Users.html", 2500)),
+    ]
+
     results = []
     all_text_parts = []
 
-    all_urls = (
-        [(s["url"], s.get("label", s["url"])) for s in WEB_SOURCES]
-        + [(u, "Medium 博客") for u in MEDIUM_ARTICLES]
-        + [(u, "新闻稿") for u in PRESS_RELEASES]
-    )
-
-    for url, label in all_urls:
+    for label, fn in tasks:
         t0 = time.time()
-        text = _fetch_text(url, max_chars=2500)
+        text = fn()
         elapsed = round(time.time() - t0, 1)
         ok = not text.startswith("[抓取失败")
-        results.append({"url": url, "label": label, "ok": ok, "elapsed": elapsed})
-        if ok:
-            all_text_parts.append(f"### 来源：{label}\nURL: {url}\n{text}")
+        results.append({"label": label, "ok": ok, "elapsed": elapsed})
+        if ok and len(text.strip()) > 50:
+            all_text_parts.append(f"### 来源：{label}\n{text}")
 
     combined = "\n\n---\n\n".join(all_text_parts)
     return combined, results
 
-KNOWLEDGE = load_knowledge()
 
-# ── OpenAI 客户端工厂 ─────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# 🤖  LLM 调用
+# ══════════════════════════════════════════════════════════════════════════════
 def get_client(api_key: str, base_url: str) -> OpenAI:
     kwargs = {"api_key": api_key}
     if base_url.strip():
         kwargs["base_url"] = base_url.strip()
     return OpenAI(**kwargs)
 
-# ── Prompt 构建 ───────────────────────────────────────────────────────────────
+
 def build_system_prompt(language: str, web_content: str = "") -> str:
     lang_instruction = (
         "请使用中文（简体）输出所有内容。" if language == "中文 (Chinese)"
         else "Please output ALL content in English. Do not use Chinese anywhere in the article body."
     )
     web_section = (
-        f"\n\n【实时网络资料（来自 mp.net 官网 / Medium 博客 / 新闻稿）】\n{web_content[:8000]}"
+        f"\n\n【实时网络资料（来自 mp.net 官网 / Medium / Twitter / Google / 百度）】\n{web_content[:8000]}"
         if web_content.strip() else ""
     )
     return f"""你是 MPChat 的顶级内容营销专家，专精 SEO 内容策略、加密金融科普写作和 AI 绘画提示词（Prompt）工程。
@@ -309,16 +346,9 @@ def build_system_prompt(language: str, web_content: str = "") -> str:
 """
 
 
-def build_user_prompt(
-    language: str,
-    audience: str,
-    selling_points: list,
-    style: str,
-    keywords: str,
-) -> str:
+def build_user_prompt(language, audience, selling_points, style, keywords):
     sp_str = "、".join(selling_points) if selling_points else "MPChat 全功能"
     kw_str = keywords.strip() if keywords.strip() else "MPChat, 加密支付, 稳定币"
-
     return f"""请根据以下参数，生成一篇完整的 MPChat 推广软文和配套 AI 绘画提示词。
 
 【生成参数】
@@ -331,21 +361,12 @@ def build_user_prompt(
 请严格按照系统提示中规定的 JSON 格式输出，确保 JSON 合法可解析。
 """
 
-# ── 调用 LLM ──────────────────────────────────────────────────────────────────
-def generate_article(
-    client: OpenAI,
-    model: str,
-    language: str,
-    audience: str,
-    selling_points: list,
-    style: str,
-    keywords: str,
-    web_content: str = "",
-) -> dict:
+
+def generate_article(client, model, language, audience, selling_points,
+                     style, keywords, web_content=""):
     system_prompt = build_system_prompt(language, web_content)
     user_prompt = build_user_prompt(language, audience, selling_points, style, keywords)
 
-    # Gemini 2.5+ 支持 JSON mode；若旧版不支持则 fallback 到纯文本模式
     try:
         response = client.chat.completions.create(
             model=model,
@@ -358,7 +379,6 @@ def generate_article(
             response_format={"type": "json_object"},
         )
     except Exception:
-        # fallback：不带 response_format（兼容不支持 JSON mode 的旧模型）
         response = client.chat.completions.create(
             model=model,
             messages=[
@@ -369,138 +389,158 @@ def generate_article(
             max_tokens=4000,
         )
 
-    raw = response.choices[0].message.content
-    # 清理可能的 markdown 代码块包裹
-    raw = raw.strip()
+    raw = response.choices[0].message.content.strip()
     if raw.startswith("```"):
-        raw = raw.split("```", 2)[-1] if raw.count("```") >= 2 else raw
-        raw = raw.lstrip("json").strip().rstrip("```").strip()
+        lines = raw.split("\n")
+        inner = "\n".join(lines[1:])
+        if "```" in inner:
+            raw = inner[:inner.rfind("```")].strip()
+        else:
+            raw = inner.strip()
     return json.loads(raw)
 
-# ── UI：顶部 Banner ───────────────────────────────────────────────────────────
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🎨  UI — 顶部 Banner
+# ══════════════════════════════════════════════════════════════════════════════
 st.markdown("""
 <div class="mp-banner">
-  <div>
-    <div style="font-size:2.2rem;">🌿</div>
-  </div>
+  <div><div style="font-size:2.2rem;">🌿</div></div>
   <div>
     <h1>MPChat 智能软文生成器</h1>
-    <p>基于产品知识库 · SEO 优化 · 中英双语 · 自动配图 Prompt</p>
+    <p>产品知识库 + 全网实时抓取 · SEO 优化 · 中英双语 · AI 配图 Prompt</p>
     <span class="mp-badge">Live with Crypto</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-# ── UI：侧边栏 ────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# 📋  UI — 侧边栏
+# ══════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("### 🔑 API 配置")
+    # ── 🔑 API 配置 ───────────────────────────────────────────────────────────
+    st.markdown("### 🔑 AI 服务商配置")
 
+    provider_name = st.selectbox(
+        "选择 AI 服务商",
+        options=list(PROVIDERS.keys()),
+        index=0,
+        help="选择后会自动填充 Base URL 和推荐模型",
+    )
+    provider = PROVIDERS[provider_name]
+
+    # API Key
+    env_key = os.getenv("OPENAI_API_KEY", "")
     api_key_input = st.text_input(
         "API Key",
-        value=os.getenv("OPENAI_API_KEY", ""),
+        value=env_key,
         type="password",
-        placeholder="AIzaSy... 或 sk-...",
-        help="支持 Google Gemini（AIzaSy...）、OpenAI（sk-...）、DeepSeek 等",
+        placeholder=provider["key_prefix"] or "输入 API Key",
     )
+    if provider["get_key_url"]:
+        st.caption(f"🔗 [获取 Key → {provider_name.split('（')[0].strip()}]({provider['get_key_url']})")
+
+    # Base URL（自动填充，可手动覆盖）
+    env_url = os.getenv("OPENAI_BASE_URL", "")
+    default_url = env_url if env_url else provider["base_url"]
     base_url_input = st.text_input(
         "Base URL",
-        value=os.getenv(
-            "OPENAI_BASE_URL",
-            "https://generativelanguage.googleapis.com/v1beta/openai/",
-        ),
-        help="Gemini 默认已填好；OpenAI 请改为 https://api.openai.com/v1",
-    )
-    model_input = st.text_input(
-        "模型名称",
-        value=os.getenv("OPENAI_MODEL", "gemini-2.5-flash"),
-        placeholder="gemini-2.5-flash",
-        help="Gemini: gemini-2.5-flash（推荐）/ gemini-2.0-flash-001 | OpenAI: gpt-4o",
+        value=default_url,
+        help="已根据服务商自动填充，一般无需修改",
     )
 
+    # 模型选择
+    env_model = os.getenv("OPENAI_MODEL", "")
+    if provider["models"]:
+        model_input = st.selectbox(
+            "模型",
+            options=provider["models"],
+            index=0,
+            help="推荐使用列表中的第一个模型",
+        )
+    else:
+        model_input = st.text_input(
+            "模型名称",
+            value=env_model or "",
+            placeholder="手动输入模型名",
+        )
+
     st.divider()
+
+    # ── 🌐 语言 ───────────────────────────────────────────────────────────────
     st.markdown("### 🌐 语言")
-    language = st.radio(
-        "输出语言",
-        options=["中文 (Chinese)", "英文 (English)"],
-        index=0,
-        label_visibility="collapsed",
-    )
+    language = st.radio("输出语言", ["中文 (Chinese)", "英文 (English)"],
+                        index=0, label_visibility="collapsed")
 
     st.divider()
+
+    # ── 🎯 受众 ───────────────────────────────────────────────────────────────
     st.markdown("### 🎯 目标受众")
-    audience_options = [
-        "数字游民与出海创业者",
-        "跨境务工与留学生",
-        "Web3 极客与加密投资者",
-        "开发者与社群主",
-    ]
-    audience = st.radio(
-        "目标受众",
-        options=audience_options,
-        index=0,
-        label_visibility="collapsed",
-    )
+    audience = st.radio("目标受众", [
+        "数字游民与出海创业者", "跨境务工与留学生",
+        "Web3 极客与加密投资者", "开发者与社群主",
+    ], index=0, label_visibility="collapsed")
 
     st.divider()
+
+    # ── 💎 卖点 ───────────────────────────────────────────────────────────────
     st.markdown("### 💎 主打卖点（可多选）")
-    sp_mp_card = st.checkbox("💳 MP Card（全球消费）", value=True)
-    sp_mp_chat = st.checkbox("💬 MP Chat（加密社交与红包）", value=True)
+    sp_mp_card   = st.checkbox("💳 MP Card（全球消费）", value=True)
+    sp_mp_chat   = st.checkbox("💬 MP Chat（加密社交与红包）", value=True)
     sp_mp_wallet = st.checkbox("🏦 MP Wallet（安全托管与理财）", value=False)
-    sp_dev = st.checkbox("⚙️ 开发者平台（MiniApp 生态）", value=False)
+    sp_dev       = st.checkbox("⚙️ 开发者平台（MiniApp 生态）", value=False)
 
     selling_points = []
-    if sp_mp_card:
-        selling_points.append("MP Card（全球消费，Visa/Mastercard网络，加密货币秒转法币）")
-    if sp_mp_chat:
-        selling_points.append("MP Chat（端到端加密社交，加密红包，P2P即时转账）")
-    if sp_mp_wallet:
-        selling_points.append("MP Wallet（机构级合规托管，RWA理财，DEX交易）")
-    if sp_dev:
-        selling_points.append("开发者平台（MiniApp生态，API/SDK，Bot框架，PSP能力）")
+    if sp_mp_card:   selling_points.append("MP Card（全球消费，Visa/Mastercard网络，加密货币秒转法币）")
+    if sp_mp_chat:   selling_points.append("MP Chat（端到端加密社交，加密红包，P2P即时转账）")
+    if sp_mp_wallet: selling_points.append("MP Wallet（机构级合规托管，RWA理财，DEX交易）")
+    if sp_dev:       selling_points.append("开发者平台（MiniApp生态，API/SDK，Bot框架，PSP能力）")
 
     st.divider()
+
+    # ── ✍️ 文风 ───────────────────────────────────────────────────────────────
     st.markdown("### ✍️ 文章文风")
-    style_options = {
+    style_map = {
         "🔥 痛点故事型（引发共鸣）": "痛点故事型",
         "📚 干货教程型（评测种草）": "干货教程型",
         "📊 行业分析型（宏观专业）": "行业分析型",
     }
-    style_label = st.radio(
-        "文章文风",
-        options=list(style_options.keys()),
-        index=0,
-        label_visibility="collapsed",
-    )
-    style = style_options[style_label]
+    style_label = st.radio("文风", list(style_map.keys()), index=0,
+                           label_visibility="collapsed")
+    style = style_map[style_label]
 
     st.divider()
+
+    # ── 🔍 关键词 ─────────────────────────────────────────────────────────────
     st.markdown("### 🔍 SEO 核心关键词")
-    keywords = st.text_area(
-        "关键词（3-5个，逗号分隔）",
-        placeholder="加密信用卡, USDT支付, 跨境汇款, 数字游民",
-        height=80,
-        label_visibility="collapsed",
-        help="这些关键词将被自然植入文章正文，提升 SEO 表现",
-    )
+    keywords = st.text_area("关键词（3-5个）",
+                            placeholder="加密信用卡, USDT支付, 跨境汇款, 数字游民",
+                            height=80, label_visibility="collapsed",
+                            help="将被自然植入文章正文，提升 SEO 表现")
 
     st.divider()
+
+    # ── 🌍 网络知识库 ─────────────────────────────────────────────────────────
     st.markdown("### 🌍 网络知识库")
-    use_web = st.toggle("抓取 mp.net 官网 + 博客", value=True,
-                        help="开启后将实时抓取官网/Medium/新闻稿作为额外上下文（缓存1小时）")
+    use_web = st.toggle("抓取全网 MPChat 资料", value=True,
+                        help="官网 + Medium + Twitter + Google + 百度（缓存 1 小时）")
     if use_web:
-        with st.spinner("正在抓取网络资料..."):
+        with st.spinner("🌐 正在抓取全网资料..."):
             web_content, web_status = fetch_web_knowledge()
         ok_count = sum(1 for s in web_status if s["ok"])
+        total = len(web_status)
+        color = "#00c853" if ok_count >= total * 0.6 else "#f59e0b"
         st.markdown(
-            f"<div style='font-size:0.78rem;color:#6b7280;'>"
-            f"✅ 成功 {ok_count} / {len(web_status)} 个来源</div>",
+            f"<div style='font-size:0.8rem;color:{color};'>"
+            f"{'✅' if ok_count >= total * 0.6 else '⚠️'} "
+            f"成功 {ok_count} / {total} 个来源</div>",
             unsafe_allow_html=True,
         )
-        with st.expander(f"查看抓取详情（{ok_count}/{len(web_status)}）"):
+        with st.expander(f"查看抓取详情（{ok_count}/{total}）"):
             for s in web_status:
                 icon = "✅" if s["ok"] else "❌"
                 st.markdown(
-                    f"<div style='font-size:0.75rem;color:#9ca3af;'>"
+                    f"<div style='font-size:0.73rem;color:#9ca3af;'>"
                     f"{icon} {s['label']} ({s['elapsed']}s)</div>",
                     unsafe_allow_html=True,
                 )
@@ -510,15 +550,15 @@ with st.sidebar:
     st.divider()
     st.markdown(
         "<div style='color:#4b5563;font-size:0.75rem;text-align:center;'>"
-        "MPChat 智能软文生成器 v1.1<br/>Live with Crypto 🌿"
-        "</div>",
+        "MPChat 智能软文生成器 v2.0<br/>Live with Crypto 🌿</div>",
         unsafe_allow_html=True,
     )
 
-# ── UI：主区域 ────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# 🎛️  UI — 主区域
+# ══════════════════════════════════════════════════════════════════════════════
 col_info, col_btn = st.columns([3, 1])
 with col_info:
-    # 当前配置预览
     active_sp = selling_points or ["（请至少选择一个卖点）"]
     st.markdown(
         f"**当前配置** · {language} · {audience} · {style} "
@@ -532,46 +572,42 @@ st.divider()
 
 # ── 生成逻辑 ──────────────────────────────────────────────────────────────────
 if generate_btn:
-    # 校验
     if not api_key_input.strip():
-        st.error("❌ 请在左侧侧边栏填写 API Key 后再生成（Google Gemini: AIzaSy... 开头）。")
+        st.error("❌ 请在左侧填写 API Key。")
         st.stop()
     if not selling_points:
         st.warning("⚠️ 请至少选择一个主打卖点。")
         st.stop()
 
-    # 开始生成
     with st.spinner("🤖 AI 正在撰写中，请稍候（约 15-30 秒）..."):
         try:
             client = get_client(api_key_input, base_url_input)
             result = generate_article(
                 client=client,
-                model=model_input.strip() or "gemini-2.5-flash",
+                model=model_input.strip() if model_input else "gemini-2.5-flash",
                 language=language,
                 audience=audience,
                 selling_points=selling_points,
                 style=style,
                 keywords=keywords,
-                web_content=web_content,
+                web_content=web_content if use_web else "",
             )
-
-            # 存入 session_state，避免刷新丢失
             st.session_state["last_result"] = result
             st.session_state["last_language"] = language
 
         except json.JSONDecodeError:
-            st.error("❌ AI 返回格式异常，无法解析 JSON。请重试或检查模型是否支持 JSON mode。")
+            st.error("❌ AI 返回格式异常，无法解析 JSON。请重试。")
             st.stop()
         except Exception as e:
-            err_msg = str(e)
-            if "api_key" in err_msg.lower() or "authentication" in err_msg.lower():
-                st.error("❌ API Key 无效或已过期，请检查后重试。")
-            elif "model" in err_msg.lower():
-                st.error(f"❌ 模型 `{model_input}` 不存在或无访问权限。请检查模型名称。")
-            elif "rate_limit" in err_msg.lower():
+            err = str(e)
+            if "api_key" in err.lower() or "auth" in err.lower():
+                st.error("❌ API Key 无效或已过期。")
+            elif "model" in err.lower() or "not found" in err.lower():
+                st.error(f"❌ 模型 `{model_input}` 不可用。请在侧边栏切换模型。")
+            elif "rate" in err.lower():
                 st.error("❌ 触发速率限制，请稍后重试。")
             else:
-                st.error(f"❌ 生成失败：{err_msg}")
+                st.error(f"❌ 生成失败：{err}")
             st.stop()
 
     st.success("✅ 生成完成！")
@@ -579,117 +615,76 @@ if generate_btn:
 # ── 输出展示 ──────────────────────────────────────────────────────────────────
 if "last_result" in st.session_state:
     result = st.session_state["last_result"]
-    lang = st.session_state.get("last_language", "中文 (Chinese)")
 
-    # ── 模块 A：SEO 元数据 ────────────────────────────────────────────────────
-    st.markdown(
-        '<div class="output-card-title">📌 模块 A — SEO 元数据</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="output-card-title">📌 模块 A — SEO 元数据</div>',
+                unsafe_allow_html=True)
 
     seo_title = result.get("seo_title", "（未生成）")
     meta_desc = result.get("meta_description", "（未生成）")
 
-    col_a1, col_a2 = st.columns([1, 1])
+    col_a1, col_a2 = st.columns(2)
     with col_a1:
-        st.markdown("**🏷️ SEO Title（标题）**")
-        st.markdown(
-            f'<div class="seo-title-box">{seo_title}</div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown("**🏷️ SEO Title**")
+        st.markdown(f'<div class="seo-title-box">{seo_title}</div>', unsafe_allow_html=True)
         st.caption(f"字符数：{len(seo_title)} / 建议 50-60")
     with col_a2:
-        st.markdown("**📝 Meta Description（元描述）**")
-        st.markdown(
-            f'<div class="seo-desc-box">{meta_desc}</div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown("**📝 Meta Description**")
+        st.markdown(f'<div class="seo-desc-box">{meta_desc}</div>', unsafe_allow_html=True)
         st.caption(f"字符数：{len(meta_desc)} / 建议 120-160")
 
-    # 复制按钮（SEO 元数据）
-    with st.expander("📋 复制 SEO 元数据（原始文本）"):
-        st.code(
-            f"Title:\n{seo_title}\n\nMeta Description:\n{meta_desc}",
-            language="text",
-        )
+    with st.expander("📋 复制 SEO 元数据"):
+        st.code(f"Title:\n{seo_title}\n\nMeta Description:\n{meta_desc}", language="text")
 
     st.divider()
 
-    # ── 模块 B：正文内容 ──────────────────────────────────────────────────────
-    st.markdown(
-        '<div class="output-card-title">📄 模块 B — 正文内容（Markdown 预览）</div>',
-        unsafe_allow_html=True,
-    )
-
-    article = result.get("article", "（文章内容未生成）")
-
-    # 渲染 Markdown
+    st.markdown('<div class="output-card-title">📄 模块 B — 正文内容</div>',
+                unsafe_allow_html=True)
+    article = result.get("article", "（未生成）")
     st.markdown(article)
-
-    # 原始 Markdown（方便复制）
-    with st.expander("📋 复制原始 Markdown 源码"):
+    with st.expander("📋 复制 Markdown 源码"):
         st.code(article, language="markdown")
 
     st.divider()
 
-    # ── 模块 C：配图生成指令 ──────────────────────────────────────────────────
-    st.markdown(
-        '<div class="output-card-title">🎨 模块 C — AI 配图生成指令（Image Prompts）</div>',
-        unsafe_allow_html=True,
-    )
-
+    st.markdown('<div class="output-card-title">🎨 模块 C — AI 配图指令</div>',
+                unsafe_allow_html=True)
     image_prompts = result.get("image_prompts", [])
     if not image_prompts:
-        st.info("暂无配图提示词（请重新生成）。")
+        st.info("暂无配图提示词。")
     else:
         cols = st.columns(min(len(image_prompts), 3))
         for i, item in enumerate(image_prompts):
             with cols[i % len(cols)]:
-                scene = item.get("scene", f"场景 {i + 1}")
+                scene = item.get("scene", f"场景 {i+1}")
                 prompt = item.get("prompt", "")
-                st.markdown(f"**🖼️ 场景 {i + 1}：{scene}**")
+                st.markdown(f"**🖼️ 场景 {i+1}：{scene}**")
                 st.markdown(
                     f'<div class="image-prompt-block">'
                     f'<span class="image-prompt-label">Midjourney / DALL-E Prompt ↓</span>'
                     f'{prompt}'
                     f'<div class="image-prompt-cn">📖 画面说明：{scene}</div>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
+                    f'</div>', unsafe_allow_html=True)
 
-        # 一键复制全部 Prompts
-        with st.expander("📋 复制全部 Image Prompts（纯文本）"):
+        with st.expander("📋 复制全部 Image Prompts"):
             all_prompts = "\n\n".join(
-                [
-                    f"【场景 {i + 1}：{item.get('scene', '')}】\n{item.get('prompt', '')}"
-                    for i, item in enumerate(image_prompts)
-                ]
-            )
+                f"【场景 {i+1}：{it.get('scene','')}】\n{it.get('prompt','')}"
+                for i, it in enumerate(image_prompts))
             st.code(all_prompts, language="text")
 
     st.divider()
-
-    # ── 底部：完整 JSON 原始输出 ──────────────────────────────────────────────
-    with st.expander("🔧 查看完整 JSON 原始输出（调试用）"):
+    with st.expander("🔧 查看完整 JSON（调试用）"):
         st.json(result)
 
 else:
-    # 引导占位区域
     st.markdown("""
-<div style="
-    text-align: center;
-    padding: 60px 20px;
-    color: #4b5563;
-    background: #0d1117;
-    border: 1px dashed #1f2937;
-    border-radius: 12px;
-">
-    <div style="font-size: 3rem; margin-bottom: 16px;">🌿</div>
-    <div style="font-size: 1.1rem; color: #6b7280; margin-bottom: 8px;">
-        在左侧配置参数，点击「🚀 生成高质量软文」开始创作
+<div style="text-align:center; padding:60px 20px; color:#4b5563;
+    background:#0d1117; border:1px dashed #1f2937; border-radius:12px;">
+    <div style="font-size:3rem; margin-bottom:16px;">🌿</div>
+    <div style="font-size:1.1rem; color:#6b7280; margin-bottom:8px;">
+        在左侧配置 AI 服务商和参数，点击「🚀 生成高质量软文」开始创作
     </div>
-    <div style="font-size: 0.85rem; color: #374151;">
-        支持中/英双语 · SEO 优化 · 自动生成 AI 配图 Prompt
+    <div style="font-size:0.85rem; color:#374151;">
+        支持 Gemini / OpenAI / DeepSeek / Kimi / Claude（via OpenRouter）
     </div>
 </div>
 """, unsafe_allow_html=True)
