@@ -950,13 +950,40 @@ if "last_result" in st.session_state:
     article = result.get("article", "（未生成）")
 
     pixabay_images_for_insert = st.session_state.get("last_pixabay", [])
+
     if pixabay_images_for_insert:
         article_with_images = insert_images_into_article(
             article, pixabay_images_for_insert
         )
+        _lines = article.split('\n')
+        _h2_idx = [i for i, ln in enumerate(_lines) if ln.strip().startswith('## ')]
+        if len(_h2_idx) >= 2:
+            _img_positions = _h2_idx[1::2][:3]
+        elif _h2_idx:
+            _img_positions = [_h2_idx[0]]
+        else:
+            _img_positions = []
+        _img_map: dict[int, dict] = {}
+        for _pi, _pos in enumerate(_img_positions):
+            if _pi < len(pixabay_images_for_insert):
+                _img_map[_pos] = pixabay_images_for_insert[_pi]
+        _chunk: list[str] = []
+        for _li, _line in enumerate(_lines):
+            _chunk.append(_line)
+            if _li in _img_map:
+                st.markdown('\n'.join(_chunk))
+                _chunk = []
+                _img = _img_map[_li]
+                st.image(
+                    _img['url'],
+                    caption=f"📷 {_img['photographer']} via Pixabay",
+                    use_container_width=True,
+                )
+        if _chunk:
+            st.markdown('\n'.join(_chunk))
     else:
         article_with_images = article
-    st.markdown(article_with_images)
+        st.markdown(article)
 
     export_col1, export_col2, export_col3 = st.columns(3)
     with export_col1:
@@ -1029,13 +1056,21 @@ if "last_result" in st.session_state:
 
     pixabay_images = st.session_state.get("last_pixabay", [])
     if pixabay_images:
-        st.markdown("**📸 Pixabay 实际图片**")
+        st.markdown(f"**📸 Pixabay 实际图片（{len(pixabay_images)} 张）**")
         img_cols = st.columns(min(len(pixabay_images), 4))
         for i, img in enumerate(pixabay_images):
             with img_cols[i % len(img_cols)]:
-                st.image(img["preview_url"], caption=img["alt_text"], use_container_width=True)
+                st.image(img["url"], caption=img["alt_text"], use_container_width=True)
                 st.caption(f"📷 {img['photographer']} · [Pixabay]({img['page_url']})")
         st.divider()
+    else:
+        ai_search_terms = result.get("image_search_terms", [])
+        st.info(
+            f"📷 未获取到 Pixabay 图片。\n\n"
+            f"**AI 建议搜索词:** {', '.join(ai_search_terms) if ai_search_terms else '无'}\n\n"
+            f"请确认：① 已开启「获取 Pixabay 实际图片」开关 "
+            f"② Pixabay API Key 已正确填写"
+        )
 
     image_prompts = result.get("image_prompts", [])
     if image_prompts:
