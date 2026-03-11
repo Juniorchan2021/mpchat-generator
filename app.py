@@ -624,7 +624,7 @@ with st.sidebar:
     if use_pixabay:
         pixabay_key = st.text_input(
             "Pixabay API Key",
-            value=os.getenv("PIXABAY_API_KEY", "46561407-37c46214d0e52dffc32a430eb3"),
+            value=os.getenv("PIXABAY_API_KEY", "46561407-37c6214d0e52dffc32a430eb3"),
             type="password",
             placeholder="从 pixabay.com/api/docs 获取",
         )
@@ -786,6 +786,47 @@ if "last_result" in st.session_state:
                 unsafe_allow_html=True)
     article = result.get("article", "（未生成）")
     st.markdown(article)
+
+    export_col1, export_col2, export_col3 = st.columns(3)
+    with export_col1:
+        st.download_button(
+            "📥 导出 Markdown",
+            data=f"# {seo_title}\n\n> {meta_desc}\n\n---\n\n{article}",
+            file_name=f"{slug or 'mpchat-article'}.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+    with export_col2:
+        html_content = f"""<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<meta name="description" content="{meta_desc}">
+<title>{seo_title}</title>
+<style>body{{font-family:system-ui,sans-serif;max-width:800px;margin:0 auto;padding:40px 20px;line-height:1.8;color:#1a1a1a}}h1{{color:#00c853}}h2{{color:#0d2137;border-bottom:2px solid #00c85330;padding-bottom:8px}}a{{color:#00c853}}</style>
+</head><body>
+{article.replace(chr(10), '<br>')}
+</body></html>"""
+        st.download_button(
+            "📥 导出 HTML",
+            data=html_content,
+            file_name=f"{slug or 'mpchat-article'}.html",
+            mime="text/html",
+            use_container_width=True,
+        )
+    with export_col3:
+        full_export = (
+            f"SEO Title: {seo_title}\n"
+            f"Meta Description: {meta_desc}\n"
+            f"Slug: /{slug}\n\n"
+            f"{'='*60}\n\n{article}"
+        )
+        st.download_button(
+            "📥 导出纯文本",
+            data=full_export,
+            file_name=f"{slug or 'mpchat-article'}.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
+
     with st.expander("📋 复制 Markdown 源码"):
         st.code(article, language="markdown")
 
@@ -899,6 +940,68 @@ if "last_result" in st.session_state:
                 st.markdown(
                     f"- `{kw}` — 出现 {info['count']} 次，密度 {info['density_pct']}%"
                 )
+
+        if score < 90:
+            st.divider()
+            st.markdown(f"**当前评分 {score}/100，建议优化到 90+ 以获得更好的 SEO 效果**")
+            if st.button("🚀 一键 SEO 优化到 90+", use_container_width=True,
+                         key="seo_optimize_btn"):
+                issues = []
+                if stats["h1_count"] < 1:
+                    issues.append("缺少 H1 标题（用 # 开头）")
+                if stats["h2_count"] < 2:
+                    issues.append(f"H2 段落不足（当前 {stats['h2_count']} 个，建议至少 3 个）")
+                if not stats["has_cta"]:
+                    issues.append("缺少 CTA（如「立即下载」「免费注册」）")
+                if stats["word_count"] < 600:
+                    issues.append(f"字数偏少（当前 {stats['word_count']}，建议 800-1200）")
+                if stats["keyword_density"]:
+                    low_kw = [k for k, v in stats["keyword_density"].items() if v["count"] < 2]
+                    if low_kw:
+                        issues.append(f"关键词出现次数不足：{', '.join(low_kw)}")
+
+                optimize_prompt = f"""请优化以下文章的 SEO 表现，目标评分 90-100 分。
+
+【当前问题】
+{chr(10).join(f'- {iss}' for iss in issues) if issues else '- 整体结构需要优化'}
+
+【SEO 优化要求】
+- 确保有 1 个 H1（#）和至少 3 个 H2（##）
+- 自然增加关键词密度到 1-2%（关键词：{kw_for_stats}）
+- 结尾必须有明确的 CTA（引导下载 MPChat 或申请 MP Card）
+- 文章总长度 800-1200 字
+- 每段不超过 150 字
+
+【原文】
+{article}
+
+请直接输出优化后的完整文章（Markdown 格式），不要输出 JSON，不要解释修改内容。"""
+
+                with st.spinner("🤖 正在 SEO 优化中..."):
+                    try:
+                        opt_client = get_client(api_key_input, base_url_input)
+                        opt_response = opt_client.chat.completions.create(
+                            model=model_input.strip() if model_input else "gemini-2.5-flash",
+                            messages=[
+                                {"role": "system", "content": "你是 SEO 优化专家，请直接输出优化后的 Markdown 文章。"},
+                                {"role": "user", "content": optimize_prompt},
+                            ],
+                            temperature=0.6,
+                            max_tokens=4000,
+                        )
+                        optimized = opt_response.choices[0].message.content.strip()
+                        if optimized.startswith("```"):
+                            opt_lines = optimized.split("\n")
+                            opt_inner = "\n".join(opt_lines[1:])
+                            if "```" in opt_inner:
+                                optimized = opt_inner[:opt_inner.rfind("```")].strip()
+                            else:
+                                optimized = opt_inner.strip()
+
+                        st.session_state["last_result"]["article"] = optimized
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"优化失败：{e}")
 
     st.divider()
     with st.expander("🔧 查看完整 JSON（调试用）"):
