@@ -547,16 +547,17 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* ═══ Stripe × Apple Dark Theme ═══ */
 
-/* Global Reset & Font */
 html, body, [class*="css"] {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    background-color: #0E0E11;
-    color: #EDEDED;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+                 "Helvetica Neue", Arial, sans-serif;
+    background-color: #09090B;
+    color: #FAFAFA;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
-/* Hide Streamlit default elements but keep sidebar toggle */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header[data-testid="stHeader"] {
@@ -568,171 +569,184 @@ header[data-testid="stHeader"] {
     color: #A1A1AA !important;
 }
 
-/* Linear/Stripe Dark Theme Overrides */
 .stApp {
-    background-color: #0E0E11;
-    background-image: radial-gradient(circle at 50% 0%, #1a1a24 0%, #0E0E11 70%);
+    background-color: #09090B;
+    background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99,91,255,0.12), transparent),
+        radial-gradient(ellipse 60% 40% at 80% 0%, rgba(0,150,255,0.06), transparent);
 }
 
-/* Banner with Stripe-like Gradient */
+/* ── Banner ── */
 .mp-banner {
-    background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
-    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(17,17,21,0.7);
+    border: 1px solid rgba(255,255,255,0.06);
     border-radius: 16px;
     padding: 32px 40px;
     margin-bottom: 32px;
     display: flex; align-items: center; gap: 24px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+    backdrop-filter: blur(20px);
     position: relative;
     overflow: hidden;
 }
 .mp-banner::before {
     content: '';
     position: absolute;
-    top: -50%; left: -50%; width: 200%; height: 200%;
-    background: radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.15), transparent 60%);
+    top: -60%; left: -30%; width: 160%; height: 200%;
+    background: radial-gradient(circle at 30% 50%, rgba(99,91,255,0.10), transparent 55%);
     z-index: 0; pointer-events: none;
 }
 .mp-banner > div { position: relative; z-index: 1; }
-.mp-banner h1 { 
-    color: #FFFFFF; font-size: 2.2rem; font-weight: 700; margin: 0; letter-spacing: -0.02em;
-    background: linear-gradient(to right, #fff, #a5b4fc);
+.mp-banner img.mp-logo { height: 44px; width: auto; }
+.mp-banner h1 {
+    font-size: 2rem; font-weight: 700; margin: 0; letter-spacing: -0.03em;
+    background: linear-gradient(135deg, #FFFFFF 0%, #635BFF 50%, #0096FF 100%);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
-.mp-banner p  { color: #A1A1AA; font-size: 1rem; margin: 8px 0 0 0; font-weight: 400; }
+.mp-banner p { color: #A1A1AA; font-size: 0.95rem; margin: 6px 0 0 0; font-weight: 400; letter-spacing: -0.01em; }
 .mp-badge {
-    background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); color: #818CF8;
-    border-radius: 20px; padding: 4px 12px; font-size: 0.75rem;
-    font-weight: 600; display: inline-block; margin-top: 12px; letter-spacing: 0.05em; text-transform: uppercase;
+    background: rgba(99,91,255,0.08);
+    border: 1px solid rgba(99,91,255,0.25);
+    color: #635BFF;
+    border-radius: 20px; padding: 4px 14px; font-size: 0.7rem;
+    font-weight: 600; display: inline-block; margin-top: 12px;
+    letter-spacing: 0.08em; text-transform: uppercase;
 }
 
-/* Glassmorphism Cards (Linear style) */
+/* ── Frosted Glass Cards ── */
 div[data-testid="stVerticalBlock"] > div[style*="border"] {
-    background: rgba(24, 24, 27, 0.6) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-radius: 16px !important;
+    background: rgba(17,17,21,0.8) !important;
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    border-radius: 14px !important;
     padding: 24px !important;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2) !important;
-    backdrop-filter: blur(12px) !important;
-    transition: transform 0.2s ease, border-color 0.2s ease;
-}
-div[data-testid="stVerticalBlock"] > div[style*="border"]:hover {
-    border-color: rgba(255, 255, 255, 0.15) !important;
-}
-
-/* Typography for labels */
-.stMarkdown p { color: #D4D4D8; }
-.stMarkdown strong { color: #F4F4F5; font-weight: 600; letter-spacing: -0.01em; }
-.stCaption { color: #A1A1AA !important; font-size: 0.85rem !important; margin-bottom: 8px !important; }
-
-/* Primary Button (Linear style) */
-.stButton > button[kind="primary"] {
-    background: linear-gradient(180deg, #6366F1 0%, #4F46E5 100%);
-    color: white; font-weight: 600; border: none;
-    border-radius: 8px; padding: 12px 24px; transition: all 0.2s ease;
-    box-shadow: 0 2px 10px rgba(79, 70, 229, 0.3), inset 0 1px 0 rgba(255,255,255,0.2);
-    letter-spacing: 0.02em;
-}
-.stButton > button[kind="primary"]:hover {
-    background: linear-gradient(180deg, #818CF8 0%, #6366F1 100%);
-    transform: translateY(-1px); box-shadow: 0 4px 16px rgba(79, 70, 229, 0.4), inset 0 1px 0 rgba(255,255,255,0.2);
-}
-
-/* Secondary Button */
-.stButton > button[kind="secondary"] {
-    background: rgba(255, 255, 255, 0.05);
-    color: #E4E4E7; font-weight: 500; border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px; transition: all 0.2s ease;
-}
-.stButton > button[kind="secondary"]:hover {
-    background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2);
-}
-
-/* Inputs & Selectboxes */
-.stTextInput input, .stSelectbox div[data-baseweb="select"] > div, .stTextArea textarea {
-    background-color: rgba(0, 0, 0, 0.2) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    border-radius: 8px !important;
-    color: #F4F4F5 !important;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3) !important;
+    backdrop-filter: blur(16px) !important;
     transition: border-color 0.2s ease;
 }
-.stTextInput input:focus, .stSelectbox div[data-baseweb="select"] > div:focus-within, .stTextArea textarea:focus {
-    border-color: #6366F1 !important;
-    box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.5) !important;
+div[data-testid="stVerticalBlock"] > div[style*="border"]:hover {
+    border-color: rgba(99,91,255,0.15) !important;
 }
 
-/* Sidebar styling */
-[data-testid="stSidebar"] { 
-    background-color: #121217 !important; 
-    border-right: 1px solid rgba(255,255,255,0.05) !important;
-    min-width: 320px !important;
+/* ── Typography ── */
+.stMarkdown p { color: #D4D4D8; }
+.stMarkdown strong { color: #FAFAFA; font-weight: 600; letter-spacing: -0.01em; }
+.stCaption { color: #71717A !important; font-size: 0.82rem !important; margin-bottom: 6px !important; }
+
+/* ── Buttons ── */
+.stButton > button[kind="primary"],
+.stButton > button:first-child {
+    background: linear-gradient(180deg, #635BFF 0%, #5046E5 100%);
+    color: #fff; font-weight: 600; border: none;
+    border-radius: 8px; padding: 10px 22px; transition: all 0.15s ease;
+    box-shadow: 0 2px 12px rgba(99,91,255,0.25), inset 0 1px 0 rgba(255,255,255,0.15);
+    letter-spacing: 0.01em;
 }
-[data-testid="stSidebar"] .stMarkdown h3 {
-    color: #F4F4F5; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
-    margin-bottom: 16px;
+.stButton > button[kind="primary"]:hover,
+.stButton > button:first-child:hover {
+    background: linear-gradient(180deg, #7C75FF 0%, #635BFF 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(99,91,255,0.35), inset 0 1px 0 rgba(255,255,255,0.15);
 }
-[data-testid="stSidebar"] .stExpander {
+.stButton > button[kind="secondary"] {
+    background: rgba(255,255,255,0.04);
+    color: #E4E4E7; font-weight: 500;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px; transition: all 0.15s ease;
+}
+.stButton > button[kind="secondary"]:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.15);
+}
+
+/* ── Inputs ── */
+.stTextInput input, .stSelectbox div[data-baseweb="select"] > div, .stTextArea textarea {
+    background-color: rgba(0,0,0,0.3) !important;
     border: 1px solid rgba(255,255,255,0.08) !important;
-    border-radius: 10px !important;
-    margin-bottom: 8px !important;
+    border-radius: 8px !important;
+    color: #FAFAFA !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.stTextInput input:focus, .stSelectbox div[data-baseweb="select"] > div:focus-within, .stTextArea textarea:focus {
+    border-color: #635BFF !important;
+    box-shadow: 0 0 0 2px rgba(99,91,255,0.2) !important;
 }
 
-/* Expanders */
-.streamlit-expanderHeader {
-    background-color: transparent !important;
-    border: none !important;
-    color: #D4D4D8 !important;
-    font-weight: 500 !important;
+/* ── Sidebar ── */
+[data-testid="stSidebar"] {
+    background-color: #0C0C0F !important;
+    border-right: 1px solid rgba(255,255,255,0.06) !important;
+    min-width: 310px !important;
 }
-.streamlit-expanderContent {
-    border: none !important;
-    border-top: 1px solid rgba(255,255,255,0.05) !important;
-    padding-top: 16px !important;
+[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+    padding-top: 1.5rem !important;
+}
+.sidebar-section {
+    font-size: 0.7rem; font-weight: 600; color: #71717A;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    margin: 4px 0 12px 0; padding: 0;
+}
+.sidebar-logo { height: 28px; width: auto; margin-bottom: 4px; }
+.sidebar-footer {
+    color: #52525B; font-size: 0.72rem; text-align: center;
+    padding: 12px 0 8px 0; letter-spacing: 0.02em;
 }
 
-/* Tabs */
+/* ── Tabs (Stripe pill style) ── */
 .stTabs [data-baseweb="tab-list"] {
-    background-color: rgba(255, 255, 255, 0.05);
-    border-radius: 8px;
-    padding: 4px;
-    gap: 4px;
+    background-color: rgba(255,255,255,0.03);
+    border-radius: 10px; padding: 3px; gap: 2px;
+    border: 1px solid rgba(255,255,255,0.06);
 }
 .stTabs [data-baseweb="tab"] {
     background-color: transparent;
-    border-radius: 6px;
-    color: #A1A1AA;
-    padding: 8px 16px;
-    font-weight: 500;
+    border-radius: 8px; color: #71717A;
+    padding: 8px 16px; font-weight: 500; font-size: 0.85rem;
+    transition: all 0.15s ease;
 }
+.stTabs [data-baseweb="tab"]:hover { color: #A1A1AA; }
 .stTabs [aria-selected="true"] {
-    background-color: rgba(255, 255, 255, 0.1) !important;
-    color: #F4F4F5 !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    background-color: rgba(99,91,255,0.12) !important;
+    color: #FAFAFA !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
 }
 .stTabs [data-baseweb="tab-highlight"] { display: none; }
 
-/* Checkboxes */
-.stCheckbox label span { color: #D4D4D8 !important; font-size: 0.9rem; }
+/* ── Checkboxes & Toggles ── */
+.stCheckbox label span { color: #D4D4D8 !important; font-size: 0.88rem; }
 
-/* Dividers */
-hr { border-color: rgba(255,255,255,0.08) !important; margin: 32px 0 !important; }
+/* ── Dividers ── */
+hr { border-color: rgba(255,255,255,0.06) !important; margin: 20px 0 !important; }
 
-/* Keyword Badges */
+/* ── Keyword Badges ── */
 .kw-badge {
-    display: inline-block; padding: 4px 10px; border-radius: 6px;
-    font-size: 0.75rem; font-weight: 600; margin-left: 4px;
+    display: inline-block; padding: 3px 10px; border-radius: 6px;
+    font-size: 0.72rem; font-weight: 600; margin-left: 4px;
 }
-.kw-low  { background: rgba(16, 185, 129, 0.1); color: #34D399; border: 1px solid rgba(52, 211, 153, 0.2); }
-.kw-med  { background: rgba(245, 158, 11, 0.1); color: #FBBF24; border: 1px solid rgba(251, 191, 36, 0.2); }
-.kw-high { background: rgba(239, 68, 68, 0.1); color: #F87171; border: 1px solid rgba(248, 113, 113, 0.2); }
+.kw-low  { background: rgba(34,197,94,0.08); color: #4ADE80; border: 1px solid rgba(74,222,128,0.15); }
+.kw-med  { background: rgba(234,179,8,0.08); color: #FACC15; border: 1px solid rgba(250,204,21,0.15); }
+.kw-high { background: rgba(239,68,68,0.08); color: #F87171; border: 1px solid rgba(248,113,113,0.15); }
 
-/* Score Ring */
+/* ── Score Ring ── */
 .score-ring {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 64px; height: 64px; border-radius: 50%;
-    font-size: 1.4rem; font-weight: 700;
-    background: rgba(0,0,0,0.3);
-    box-shadow: inset 0 0 0 4px currentColor;
+    width: 60px; height: 60px; border-radius: 50%;
+    font-size: 1.3rem; font-weight: 700;
+    background: rgba(0,0,0,0.4);
+    box-shadow: inset 0 0 0 3px currentColor;
+}
+
+/* ── Radio pills in sidebar ── */
+[data-testid="stSidebar"] .stRadio > div {
+    gap: 4px !important;
+}
+[data-testid="stSidebar"] .stRadio label {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px; padding: 8px 12px;
+    transition: all 0.15s ease;
+}
+[data-testid="stSidebar"] .stRadio label:hover {
+    border-color: rgba(99,91,255,0.2);
 }
 </style>
 """, unsafe_allow_html=True)
@@ -742,7 +756,7 @@ hr { border-color: rgba(255,255,255,0.08) !important; margin: 32px 0 !important;
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown("""
 <div class="mp-banner">
-  <div><div style="font-size:2.2rem;">🌿</div></div>
+  <div><img class="mp-logo" src="https://mp.net/Logo.png" alt="MP" /></div>
   <div>
     <h1>MPChat 智能软文生成器</h1>
     <p>37+ 场景 · 25+ 卖点 · 16 种语言 · 多图库 · GEO + SEO 双优化 · 多平台分发</p>
@@ -755,110 +769,116 @@ st.markdown("""
 # 侧边栏
 # ══════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("### ⚙️ 全局设置")
-    
-    # ── 🔑 AI 服务商 ─────────────────────────────────────────────────────────
-    with st.expander("🔑 AI 服务商配置", expanded=True):
-        provider_name = st.selectbox(
-            "选择 AI 服务商", options=list(PROVIDERS.keys()), index=0,
-            help="选择后会自动填充 Base URL 和推荐模型",
+    st.markdown(
+        '<img class="sidebar-logo" src="https://mp.net/Logo.png" alt="MP" />',
+        unsafe_allow_html=True,
+    )
+
+    # ── AI 服务商 ─────────────────────────────────────────────────────────────
+    st.markdown('<p class="sidebar-section">AI 服务商</p>', unsafe_allow_html=True)
+
+    provider_name = st.selectbox(
+        "选择 AI 服务商", options=list(PROVIDERS.keys()), index=0,
+        help="选择后会自动填充 Base URL 和推荐模型",
+    )
+    provider = PROVIDERS[provider_name]
+
+    def _get_default_key():
+        if "GEMINI_API_KEY" in st.secrets:
+            return st.secrets["GEMINI_API_KEY"]
+        return os.getenv("OPENAI_API_KEY", "")
+
+    env_key = _get_default_key()
+    api_key_input = st.text_input(
+        "API Key", value=env_key, type="password",
+        placeholder=provider["key_prefix"] or "输入 API Key",
+    )
+    if provider["get_key_url"]:
+        st.caption(f"[获取 Key → {provider_name.split('（')[0].strip()}]({provider['get_key_url']})")
+
+    env_url = os.getenv("OPENAI_BASE_URL", "")
+    default_url = env_url if env_url else provider["base_url"]
+    base_url_input = st.text_input(
+        "Base URL", value=default_url,
+        help="已根据服务商自动填充，一般无需修改",
+    )
+
+    env_model = os.getenv("OPENAI_MODEL", "")
+    if provider["models"]:
+        model_input = st.selectbox("模型", options=provider["models"], index=0,
+                                   help="推荐使用列表中的第一个模型")
+    else:
+        model_input = st.text_input("模型名称", value=env_model or "",
+                                    placeholder="手动输入模型名")
+
+    st.divider()
+
+    # ── 优化模式 ──────────────────────────────────────────────────────────────
+    st.markdown('<p class="sidebar-section">优化模式</p>', unsafe_allow_html=True)
+    opt_mode = st.radio(
+        "优化模式",
+        ["SEO 模式", "SEO + GEO 双优化"],
+        index=0,
+        label_visibility="collapsed",
+        help="GEO = Generative Engine Optimization，优化 AI 搜索引擎（ChatGPT / Perplexity / Gemini）的可见性",
+    )
+    geo_mode = opt_mode == "SEO + GEO 双优化"
+
+    st.divider()
+
+    # ── 配图 ──────────────────────────────────────────────────────────────────
+    st.markdown('<p class="sidebar-section">配图</p>', unsafe_allow_html=True)
+    use_images = st.toggle("获取配图（Pixabay + Pexels + Placewise）", value=True,
+                           help="Pixabay 为主图源，Pexels 补充，Placewise CDN 兜底")
+    pixabay_key = ""
+    pexels_key = ""
+    if use_images:
+        pixabay_key = st.text_input(
+            "Pixabay API Key",
+            value=os.getenv("PIXABAY_API_KEY", "46561407-37c6214d0e52dffc32a430eb3"),
+            type="password",
+            placeholder="从 pixabay.com/api/docs 获取",
         )
-        provider = PROVIDERS[provider_name]
+        def _get_pexels_key():
+            if "PEXELS_API_KEY" in st.secrets:
+                return st.secrets["PEXELS_API_KEY"]
+            return os.getenv("PEXELS_API_KEY", "")
 
-        def _get_default_key():
-            if "GEMINI_API_KEY" in st.secrets:
-                return st.secrets["GEMINI_API_KEY"]
-            return os.getenv("OPENAI_API_KEY", "")
-
-        env_key = _get_default_key()
-        api_key_input = st.text_input(
-            "API Key", value=env_key, type="password",
-            placeholder=provider["key_prefix"] or "输入 API Key",
-        )
-        if provider["get_key_url"]:
-            st.caption(f"🔗 [获取 Key → {provider_name.split('（')[0].strip()}]({provider['get_key_url']})")
-
-        env_url = os.getenv("OPENAI_BASE_URL", "")
-        default_url = env_url if env_url else provider["base_url"]
-        base_url_input = st.text_input(
-            "Base URL", value=default_url,
-            help="已根据服务商自动填充，一般无需修改",
+        pexels_key = st.text_input(
+            "Pexels API Key",
+            value=_get_pexels_key(),
+            type="password",
+            placeholder="从 pexels.com/api 获取",
         )
 
-        env_model = os.getenv("OPENAI_MODEL", "")
-        if provider["models"]:
-            model_input = st.selectbox("模型", options=provider["models"], index=0,
-                                       help="推荐使用列表中的第一个模型")
-        else:
-            model_input = st.text_input("模型名称", value=env_model or "",
-                                        placeholder="手动输入模型名")
+    st.divider()
 
-    # ── 🧠 优化模式 ─────────────────────────────────────────────────────────
-    with st.expander("🧠 优化模式", expanded=True):
-        opt_mode = st.radio(
-            "优化模式",
-            ["SEO 模式", "SEO + GEO 双优化"],
-            index=0,
-            label_visibility="collapsed",
-            help="GEO = Generative Engine Optimization，优化 AI 搜索引擎（ChatGPT / Perplexity / Gemini）的可见性",
-        )
-        geo_mode = opt_mode == "SEO + GEO 双优化"
+    # ── 数据源 ────────────────────────────────────────────────────────────────
+    st.markdown('<p class="sidebar-section">数据源</p>', unsafe_allow_html=True)
+    use_serp = st.toggle("SERP 分析 · Google Top 10", value=False,
+                         help="爬取目标关键词的 Google 排名前 10 页面，提取内容策略注入 AI Prompt")
+    use_web = st.toggle("网络知识库 · 全网抓取", value=True,
+                        help="官网 + Medium + Twitter + Google + 百度（点击生成时抓取，缓存 2 小时）")
 
-    # ── 🖼️ 多图库配图 ──────────────────────────────────────────────────────
-    with st.expander("🖼️ 多图库配图", expanded=True):
-        use_images = st.toggle("获取配图（Pixabay + Pexels + Placewise）", value=True,
-                               help="Pixabay 为主图源，Pexels 补充，Placewise CDN 兜底")
-        pixabay_key = ""
-        pexels_key = ""
-        if use_images:
-            pixabay_key = st.text_input(
-                "Pixabay API Key（主图源）",
-                value=os.getenv("PIXABAY_API_KEY", "46561407-37c6214d0e52dffc32a430eb3"),
-                type="password",
-                placeholder="从 pixabay.com/api/docs 获取",
-            )
-            def _get_pexels_key():
-                if "PEXELS_API_KEY" in st.secrets:
-                    return st.secrets["PEXELS_API_KEY"]
-                return os.getenv("PEXELS_API_KEY", "")
+    st.divider()
 
-            pexels_key = st.text_input(
-                "Pexels API Key（补充图源）",
-                value=_get_pexels_key(),
-                type="password",
-                placeholder="从 pexels.com/api 获取",
-            )
-
-    # ── 🔍 SERP 分析 ─────────────────────────────────────────────────────────
-    with st.expander("🔍 SERP 分析", expanded=True):
-        use_serp = st.toggle("生成前分析 Google Top 10", value=False,
-                             help="爬取目标关键词的 Google 排名前 10 页面，提取内容策略注入 AI Prompt")
-        if use_serp:
-            st.caption("✅ 已开启 · 生成时自动分析竞品 SERP（约多 10 秒）")
-
-    # ── 🌍 网络知识库 ────────────────────────────────────────────────────────
-    with st.expander("🌍 网络知识库", expanded=True):
-        use_web = st.toggle("抓取全网 MPChat 资料", value=True,
-                            help="官网 + Medium + Twitter + Google + 百度（点击生成时抓取，缓存 2 小时）")
-        if use_web:
-            st.caption("✅ 已开启 · 点击「生成」时自动并行抓取 10 个来源")
-
-    # ── 📡 多平台分发 ─────────────────────────────────────────────────────────
-    with st.expander("📡 多平台分发 API", expanded=False):
-        devto_key = st.text_input("Dev.to API Key", type="password",
-                                  value=os.getenv("DEVTO_API_KEY", ""),
-                                  placeholder="从 dev.to/settings/extensions 获取")
-        hashnode_token = st.text_input("Hashnode Token", type="password",
-                                       value=os.getenv("HASHNODE_TOKEN", ""),
-                                       placeholder="从 hashnode.com/settings/developer 获取")
-        hashnode_pub_id = st.text_input("Hashnode Publication ID",
-                                        value=os.getenv("HASHNODE_PUB_ID", ""),
-                                        placeholder="从 Hashnode 博客设置获取")
+    # ── 多平台分发 ────────────────────────────────────────────────────────────
+    st.markdown('<p class="sidebar-section">多平台分发</p>', unsafe_allow_html=True)
+    devto_key = st.text_input("Dev.to API Key", type="password",
+                              value=os.getenv("DEVTO_API_KEY", ""),
+                              placeholder="从 dev.to/settings/extensions 获取")
+    hashnode_token = st.text_input("Hashnode Token", type="password",
+                                   value=os.getenv("HASHNODE_TOKEN", ""),
+                                   placeholder="从 hashnode.com/settings/developer 获取")
+    hashnode_pub_id = st.text_input("Hashnode Publication ID",
+                                    value=os.getenv("HASHNODE_PUB_ID", ""),
+                                    placeholder="从 Hashnode 博客设置获取")
 
     st.divider()
     st.markdown(
-        "<div style='color:#9ca3af;font-size:0.75rem;text-align:center;'>"
-        "MPChat 智能软文生成器 v4.0<br/>Live with Crypto 🌿</div>",
+        '<div class="sidebar-footer">'
+        '<img src="https://mp.net/Logo.png" style="height:16px;width:auto;opacity:0.4;margin-bottom:4px;" /><br/>'
+        'MPChat Generator v4.0<br/>Live with Crypto</div>',
         unsafe_allow_html=True,
     )
 
