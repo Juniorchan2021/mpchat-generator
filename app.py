@@ -547,69 +547,150 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-:root { --mp-green: #00c853; --mp-dark: #0a1628; --mp-card: #111827; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif;
+}
+
+/* Hide Streamlit elements */
+#MainMenu {visibility: hidden;}
+header {visibility: hidden;}
+footer {visibility: hidden;}
+
+/* Card UI */
+.sv-card {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    margin-bottom: 24px;
+}
+
+.sv-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Banner */
 .mp-banner {
-    background: linear-gradient(135deg, #0a1628 0%, #0d2137 50%, #0a2e1a 100%);
-    border: 1px solid #00c85330; border-radius: 12px;
-    padding: 24px 32px; margin-bottom: 24px;
+    background: #111827;
+    border-radius: 12px;
+    padding: 24px 32px;
+    margin-bottom: 24px;
     display: flex; align-items: center; gap: 16px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
-.mp-banner h1 { color: #fff; font-size: 1.8rem; font-weight: 700; margin: 0; }
-.mp-banner p  { color: #a0aec0; font-size: 0.9rem; margin: 4px 0 0 0; }
+.mp-banner h1 { color: #f9fafb; font-size: 1.8rem; font-weight: 700; margin: 0; }
+.mp-banner p  { color: #9ca3af; font-size: 0.95rem; margin: 4px 0 0 0; }
 .mp-badge {
-    background: #00c85320; border: 1px solid #00c853; color: #00c853;
+    background: #374151; border: 1px solid #4b5563; color: #d1d5db;
     border-radius: 20px; padding: 3px 12px; font-size: 0.75rem;
-    font-weight: 600; display: inline-block; margin-top: 6px;
+    font-weight: 600; display: inline-block; margin-top: 8px;
 }
+
+/* Primary Button */
+.stButton > button[kind="primary"] {
+    background: #000000;
+    color: white; font-weight: 600; border: none;
+    border-radius: 8px; padding: 12px 0; transition: all 0.2s;
+}
+.stButton > button[kind="primary"]:hover {
+    background: #374151;
+    transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* Secondary Button */
+.stButton > button[kind="secondary"] {
+    background: #ffffff;
+    color: #111827; font-weight: 500; border: 1px solid #d1d5db;
+    border-radius: 8px; transition: all 0.2s;
+}
+.stButton > button[kind="secondary"]:hover {
+    background: #f3f4f6; border-color: #9ca3af;
+}
+
+/* Segmented Control Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    background-color: #f3f4f6;
+    border-radius: 8px;
+    padding: 4px;
+    gap: 4px;
+}
+.stTabs [data-baseweb="tab"] {
+    background-color: transparent;
+    border-radius: 6px;
+    color: #4b5563;
+    padding: 8px 16px;
+    font-weight: 500;
+}
+.stTabs [aria-selected="true"] {
+    background-color: #ffffff !important;
+    color: #111827 !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.stTabs [data-baseweb="tab-highlight"] {
+    display: none;
+}
+
+/* Output Card Title */
 .output-card-title {
-    color: #00c853; font-size: 0.85rem; font-weight: 700;
-    letter-spacing: 0.08em; text-transform: uppercase;
-    margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+    color: #111827; font-size: 1rem; font-weight: 600;
+    margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid #e5e7eb; padding-bottom: 12px;
 }
+
+/* Score Ring */
+.score-ring {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 64px; height: 64px; border-radius: 50%;
+    font-size: 1.4rem; font-weight: 700;
+    background: #ffffff;
+    box-shadow: inset 0 0 0 4px currentColor;
+}
+
+/* SEO Box */
 .seo-title-box {
-    background: #00c85310; border-left: 3px solid #00c853;
+    background: #f9fafb; border-left: 3px solid #111827;
     border-radius: 0 8px 8px 0; padding: 12px 16px;
-    color: #e2e8f0; font-size: 1.05rem; font-weight: 600; margin-bottom: 8px;
+    color: #111827; font-size: 1.05rem; font-weight: 600; margin-bottom: 8px;
 }
 .seo-desc-box {
-    background: #1e293b; border-radius: 8px; padding: 10px 14px;
-    color: #94a3b8; font-size: 0.88rem; line-height: 1.6;
+    background: #f3f4f6; border-radius: 8px; padding: 12px 16px;
+    color: #4b5563; font-size: 0.9rem; line-height: 1.6;
 }
+
+/* Image Prompt */
 .image-prompt-block {
-    background: #0f172a; border: 1px solid #1e3a5f; border-radius: 8px;
+    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;
     padding: 14px 16px; margin-bottom: 10px;
-    font-family: 'Courier New', monospace; font-size: 0.8rem;
-    color: #7dd3fc; line-height: 1.7;
+    font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 0.85rem;
+    color: #111827; line-height: 1.6;
 }
-.image-prompt-label { color: #38bdf8; font-weight: 700; font-size: 0.78rem; margin-bottom: 4px; display: block; }
-.image-prompt-cn { color: #64748b; font-size: 0.78rem; margin-top: 6px; padding-top: 6px; border-top: 1px solid #1e293b; }
+.image-prompt-label { color: #6b7280; font-weight: 600; font-size: 0.75rem; margin-bottom: 6px; display: block; text-transform: uppercase; letter-spacing: 0.05em; }
+.image-prompt-cn { color: #6b7280; font-size: 0.8rem; margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e7eb; }
+
+/* Sidebar */
+[data-testid="stSidebar"] { background: #f9fafb; border-right: 1px solid #e5e7eb; }
+[data-testid="stSidebar"] .stMarkdown h3 {
+    color: #111827; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+}
+
 .kw-badge {
     display: inline-block; padding: 2px 8px; border-radius: 10px;
     font-size: 0.7rem; font-weight: 600; margin-left: 4px;
 }
-.kw-low  { background: #065f4620; color: #34d399; border: 1px solid #34d39940; }
-.kw-med  { background: #92400e20; color: #fbbf24; border: 1px solid #fbbf2440; }
-.kw-high { background: #7f1d1d20; color: #f87171; border: 1px solid #f8717140; }
-.score-ring {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 56px; height: 56px; border-radius: 50%;
-    font-size: 1.2rem; font-weight: 800;
-}
-[data-testid="stSidebar"] { background: #0d1117; }
-[data-testid="stSidebar"] .stMarkdown h3 {
-    color: #00c853; font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase;
-}
-.stButton > button {
-    background: linear-gradient(135deg, #00c853, #00a844);
-    color: white; font-weight: 700; font-size: 1rem; border: none;
-    border-radius: 10px; padding: 14px 0; width: 100%; transition: all 0.2s;
-}
-.stButton > button:hover {
-    background: linear-gradient(135deg, #00e064, #00c853);
-    transform: translateY(-1px); box-shadow: 0 4px 20px #00c85340;
-}
-hr { border-color: #1f2937; }
-footer { visibility: hidden; }
+.kw-low  { background: #dcfce7; color: #065f46; border: 1px solid #bbf7d0; }
+.kw-med  { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.kw-high { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+hr { border-color: #e5e7eb; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -631,204 +712,96 @@ st.markdown("""
 # 侧边栏
 # ══════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
+    st.markdown("### ⚙️ 全局设置")
+    
     # ── 🔑 AI 服务商 ─────────────────────────────────────────────────────────
-    st.markdown("### 🔑 AI 服务商配置")
-    provider_name = st.selectbox(
-        "选择 AI 服务商", options=list(PROVIDERS.keys()), index=0,
-        help="选择后会自动填充 Base URL 和推荐模型",
-    )
-    provider = PROVIDERS[provider_name]
+    with st.expander("🔑 AI 服务商配置", expanded=True):
+        provider_name = st.selectbox(
+            "选择 AI 服务商", options=list(PROVIDERS.keys()), index=0,
+            help="选择后会自动填充 Base URL 和推荐模型",
+        )
+        provider = PROVIDERS[provider_name]
 
-    def _get_default_key():
-        if "GEMINI_API_KEY" in st.secrets:
-            return st.secrets["GEMINI_API_KEY"]
-        return os.getenv("OPENAI_API_KEY", "")
+        def _get_default_key():
+            if "GEMINI_API_KEY" in st.secrets:
+                return st.secrets["GEMINI_API_KEY"]
+            return os.getenv("OPENAI_API_KEY", "")
 
-    env_key = _get_default_key()
-    api_key_input = st.text_input(
-        "API Key", value=env_key, type="password",
-        placeholder=provider["key_prefix"] or "输入 API Key",
-    )
-    if provider["get_key_url"]:
-        st.caption(f"🔗 [获取 Key → {provider_name.split('（')[0].strip()}]({provider['get_key_url']})")
+        env_key = _get_default_key()
+        api_key_input = st.text_input(
+            "API Key", value=env_key, type="password",
+            placeholder=provider["key_prefix"] or "输入 API Key",
+        )
+        if provider["get_key_url"]:
+            st.caption(f"🔗 [获取 Key → {provider_name.split('（')[0].strip()}]({provider['get_key_url']})")
 
-    env_url = os.getenv("OPENAI_BASE_URL", "")
-    default_url = env_url if env_url else provider["base_url"]
-    base_url_input = st.text_input(
-        "Base URL", value=default_url,
-        help="已根据服务商自动填充，一般无需修改",
-    )
+        env_url = os.getenv("OPENAI_BASE_URL", "")
+        default_url = env_url if env_url else provider["base_url"]
+        base_url_input = st.text_input(
+            "Base URL", value=default_url,
+            help="已根据服务商自动填充，一般无需修改",
+        )
 
-    env_model = os.getenv("OPENAI_MODEL", "")
-    if provider["models"]:
-        model_input = st.selectbox("模型", options=provider["models"], index=0,
-                                   help="推荐使用列表中的第一个模型")
-    else:
-        model_input = st.text_input("模型名称", value=env_model or "",
-                                    placeholder="手动输入模型名")
-
-    st.divider()
-
-    # ── 🌐 语言 ──────────────────────────────────────────────────────────────
-    st.markdown("### 🌐 语言")
-    lang_options = list(LANGUAGES.keys())
-    language = st.selectbox("输出语言", lang_options, index=0,
-                            label_visibility="collapsed")
-
-    st.divider()
+        env_model = os.getenv("OPENAI_MODEL", "")
+        if provider["models"]:
+            model_input = st.selectbox("模型", options=provider["models"], index=0,
+                                       help="推荐使用列表中的第一个模型")
+        else:
+            model_input = st.text_input("模型名称", value=env_model or "",
+                                        placeholder="手动输入模型名")
 
     # ── 🧠 优化模式 ─────────────────────────────────────────────────────────
-    st.markdown("### 🧠 优化模式")
-    opt_mode = st.radio(
-        "优化模式",
-        ["SEO 模式", "SEO + GEO 双优化"],
-        index=0,
-        label_visibility="collapsed",
-        help="GEO = Generative Engine Optimization，优化 AI 搜索引擎（ChatGPT / Perplexity / Gemini）的可见性",
-    )
-    geo_mode = opt_mode == "SEO + GEO 双优化"
-
-    st.divider()
-
-    # ── 🎯 场景选择（二级） ──────────────────────────────────────────────────
-    st.markdown("### 🎯 写作场景")
-    category_names = list(SCENARIO_CATEGORIES.keys())
-    selected_category = st.selectbox("场景分类", category_names, index=0,
-                                     label_visibility="collapsed")
-    scenarios_in_cat = SCENARIO_CATEGORIES[selected_category]
-    scenario_labels = [s["label"] for s in scenarios_in_cat]
-    selected_scenario_label = st.radio("具体场景", scenario_labels, index=0,
-                                       label_visibility="collapsed")
-    selected_scenario = next(
-        s for s in scenarios_in_cat if s["label"] == selected_scenario_label
-    )
-
-    st.divider()
-
-    # ── 💎 卖点（5 组展开） ──────────────────────────────────────────────────
-    st.markdown("### 💎 主打卖点（可多选）")
-
-    auto_sp = set(selected_scenario.get("selling_points", []))
-
-    if "sp_overrides" not in st.session_state:
-        st.session_state["sp_overrides"] = {}
-
-    selected_sp_ids: list[str] = []
-    for group_name, items in SELLING_POINT_GROUPS.items():
-        with st.expander(group_name, expanded=False):
-            for sp_id, sp_label in items.items():
-                default_val = sp_id in auto_sp
-                override_key = f"sp_{sp_id}"
-                checked = st.checkbox(
-                    sp_label, value=default_val, key=override_key,
-                )
-                if checked:
-                    selected_sp_ids.append(sp_id)
-
-    selling_points_text = "、".join(
-        SP_ID_TO_LABEL.get(sid, sid) for sid in selected_sp_ids
-    ) if selected_sp_ids else "MPChat 全功能"
-
-    st.divider()
-
-    # ── ✍️ 文风（7 种） ──────────────────────────────────────────────────────
-    st.markdown("### ✍️ 文章文风")
-    style_hint = selected_scenario.get("style_hint", "pain_story")
-    style_keys = list(ARTICLE_STYLES.keys())
-    hint_index = 0
-    for i, k in enumerate(style_keys):
-        if ARTICLE_STYLES[k]["id"] == style_hint:
-            hint_index = i
-            break
-    selected_style_key = st.radio(
-        "文风",
-        style_keys,
-        index=hint_index,
-        label_visibility="collapsed",
-        format_func=lambda k: f"{k} — {ARTICLE_STYLES[k]['desc']}",
-    )
-    style_obj = ARTICLE_STYLES[selected_style_key]
-
-    st.divider()
-
-    # ── 🔍 SEO 关键词 ────────────────────────────────────────────────────────
-    st.markdown("### 🔍 SEO 关键词")
-    st.caption("点击预设快速填充，或手动编辑")
-
-    preset_cols = st.columns(3)
-    for i, preset in enumerate(KEYWORD_PRESETS):
-        diff_cls = {"low": "kw-low", "medium": "kw-med", "high": "kw-high"}[preset["difficulty"]]
-        diff_label = {"low": "易", "medium": "中", "high": "难"}[preset["difficulty"]]
-        col = preset_cols[i % 3]
-        with col:
-            if st.button(
-                f"{preset['label']}",
-                key=f"kw_preset_{i}",
-                use_container_width=True,
-            ):
-                st.session_state["keywords_val"] = preset["keywords"]
-
-    scenario_kw = selected_scenario.get("keywords", "")
-    default_kw = st.session_state.get("keywords_val", scenario_kw)
-
-    keywords = st.text_area(
-        "关键词（3-5个）",
-        value=default_kw,
-        height=80,
-        label_visibility="collapsed",
-        help="将被自然植入文章正文，提升 SEO 表现",
-    )
-
-    st.divider()
+    with st.expander("🧠 优化模式", expanded=True):
+        opt_mode = st.radio(
+            "优化模式",
+            ["SEO 模式", "SEO + GEO 双优化"],
+            index=0,
+            label_visibility="collapsed",
+            help="GEO = Generative Engine Optimization，优化 AI 搜索引擎（ChatGPT / Perplexity / Gemini）的可见性",
+        )
+        geo_mode = opt_mode == "SEO + GEO 双优化"
 
     # ── 🖼️ 多图库配图 ──────────────────────────────────────────────────────
-    st.markdown("### 🖼️ 多图库配图")
-    use_images = st.toggle("获取配图（Pixabay + Pexels + Placewise）", value=True,
-                           help="Pixabay 为主图源，Pexels 补充，Placewise CDN 兜底")
-    pixabay_key = ""
-    pexels_key = ""
-    if use_images:
-        pixabay_key = st.text_input(
-            "Pixabay API Key（主图源）",
-            value=os.getenv("PIXABAY_API_KEY", "46561407-37c6214d0e52dffc32a430eb3"),
-            type="password",
-            placeholder="从 pixabay.com/api/docs 获取",
-        )
-        def _get_pexels_key():
-            if "PEXELS_API_KEY" in st.secrets:
-                return st.secrets["PEXELS_API_KEY"]
-            return os.getenv("PEXELS_API_KEY", "")
+    with st.expander("🖼️ 多图库配图", expanded=False):
+        use_images = st.toggle("获取配图（Pixabay + Pexels + Placewise）", value=True,
+                               help="Pixabay 为主图源，Pexels 补充，Placewise CDN 兜底")
+        pixabay_key = ""
+        pexels_key = ""
+        if use_images:
+            pixabay_key = st.text_input(
+                "Pixabay API Key（主图源）",
+                value=os.getenv("PIXABAY_API_KEY", "46561407-37c6214d0e52dffc32a430eb3"),
+                type="password",
+                placeholder="从 pixabay.com/api/docs 获取",
+            )
+            def _get_pexels_key():
+                if "PEXELS_API_KEY" in st.secrets:
+                    return st.secrets["PEXELS_API_KEY"]
+                return os.getenv("PEXELS_API_KEY", "")
 
-        pexels_key = st.text_input(
-            "Pexels API Key（补充图源）",
-            value=_get_pexels_key(),
-            type="password",
-            placeholder="从 pexels.com/api 获取",
-        )
-
-    st.divider()
+            pexels_key = st.text_input(
+                "Pexels API Key（补充图源）",
+                value=_get_pexels_key(),
+                type="password",
+                placeholder="从 pexels.com/api 获取",
+            )
 
     # ── 🔍 SERP 分析 ─────────────────────────────────────────────────────────
-    st.markdown("### 🔍 SERP 分析")
-    use_serp = st.toggle("生成前分析 Google Top 10", value=False,
-                         help="爬取目标关键词的 Google 排名前 10 页面，提取内容策略注入 AI Prompt")
-    if use_serp:
-        st.caption("✅ 已开启 · 生成时自动分析竞品 SERP（约多 10 秒）")
-
-    st.divider()
+    with st.expander("🔍 SERP 分析", expanded=False):
+        use_serp = st.toggle("生成前分析 Google Top 10", value=False,
+                             help="爬取目标关键词的 Google 排名前 10 页面，提取内容策略注入 AI Prompt")
+        if use_serp:
+            st.caption("✅ 已开启 · 生成时自动分析竞品 SERP（约多 10 秒）")
 
     # ── 🌍 网络知识库 ────────────────────────────────────────────────────────
-    st.markdown("### 🌍 网络知识库")
-    use_web = st.toggle("抓取全网 MPChat 资料", value=True,
-                        help="官网 + Medium + Twitter + Google + 百度（点击生成时抓取，缓存 2 小时）")
-    if use_web:
-        st.caption("✅ 已开启 · 点击「生成」时自动并行抓取 10 个来源")
-
-    st.divider()
+    with st.expander("🌍 网络知识库", expanded=False):
+        use_web = st.toggle("抓取全网 MPChat 资料", value=True,
+                            help="官网 + Medium + Twitter + Google + 百度（点击生成时抓取，缓存 2 小时）")
+        if use_web:
+            st.caption("✅ 已开启 · 点击「生成」时自动并行抓取 10 个来源")
 
     # ── 📡 多平台分发 ─────────────────────────────────────────────────────────
-    st.markdown("### 📡 多平台分发")
-    with st.expander("API Key 配置（可选）"):
+    with st.expander("📡 多平台分发 API", expanded=False):
         devto_key = st.text_input("Dev.to API Key", type="password",
                                   value=os.getenv("DEVTO_API_KEY", ""),
                                   placeholder="从 dev.to/settings/extensions 获取")
@@ -841,31 +814,120 @@ with st.sidebar:
 
     st.divider()
     st.markdown(
-        "<div style='color:#4b5563;font-size:0.75rem;text-align:center;'>"
+        "<div style='color:#9ca3af;font-size:0.75rem;text-align:center;'>"
         "MPChat 智能软文生成器 v4.0<br/>Live with Crypto 🌿</div>",
         unsafe_allow_html=True,
     )
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 主区域 — 生成按钮
+# 主区域 — 配置面板
 # ══════════════════════════════════════════════════════════════════════════════
-col_info, col_btn = st.columns([3, 1])
-with col_info:
-    sp_summary = ", ".join(
-        SP_ID_TO_LABEL.get(sid, sid).split("（")[0]
-        for sid in selected_sp_ids[:4]
-    ) or "（请选择卖点）"
-    if len(selected_sp_ids) > 4:
-        sp_summary += f" +{len(selected_sp_ids) - 4}"
-    st.markdown(
-        f"**当前配置** · {language} · {selected_scenario_label} "
-        f"· {style_obj['id']} · 卖点: {sp_summary}",
-        help="在左侧边栏调整参数",
+st.markdown('<div class="sv-card">', unsafe_allow_html=True)
+st.markdown('<div class="sv-title">📝 内容配置</div>', unsafe_allow_html=True)
+
+col_lang, col_cat, col_scen, col_style = st.columns(4)
+
+with col_lang:
+    st.markdown("**🌐 输出语言**")
+    lang_options = list(LANGUAGES.keys())
+    language = st.selectbox("输出语言", lang_options, index=0, label_visibility="collapsed")
+
+with col_cat:
+    st.markdown("**🎯 场景分类**")
+    category_names = list(SCENARIO_CATEGORIES.keys())
+    selected_category = st.selectbox("场景分类", category_names, index=0, label_visibility="collapsed")
+    scenarios_in_cat = SCENARIO_CATEGORIES[selected_category]
+    scenario_labels = [s["label"] for s in scenarios_in_cat]
+
+with col_scen:
+    st.markdown("**📄 具体场景**")
+    selected_scenario_label = st.selectbox("具体场景", scenario_labels, index=0, label_visibility="collapsed")
+    selected_scenario = next(s for s in scenarios_in_cat if s["label"] == selected_scenario_label)
+
+with col_style:
+    st.markdown("**✍️ 文章文风**")
+    style_hint = selected_scenario.get("style_hint", "pain_story")
+    style_keys = list(ARTICLE_STYLES.keys())
+    hint_index = 0
+    for i, k in enumerate(style_keys):
+        if ARTICLE_STYLES[k]["id"] == style_hint:
+            hint_index = i
+            break
+    selected_style_key = st.selectbox(
+        "文风",
+        style_keys,
+        index=hint_index,
+        label_visibility="collapsed",
+        format_func=lambda k: f"{k}",
     )
-with col_btn:
-    generate_btn = st.button("🚀 生成高质量软文", use_container_width=True)
+    style_obj = ARTICLE_STYLES[selected_style_key]
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="sv-card">', unsafe_allow_html=True)
+st.markdown('<div class="sv-title">💎 主打卖点 (可多选)</div>', unsafe_allow_html=True)
+
+auto_sp = set(selected_scenario.get("selling_points", []))
+if "sp_overrides" not in st.session_state:
+    st.session_state["sp_overrides"] = {}
+
+selected_sp_ids: list[str] = []
+sp_cols = st.columns(len(SELLING_POINT_GROUPS))
+for i, (group_name, items) in enumerate(SELLING_POINT_GROUPS.items()):
+    with sp_cols[i]:
+        st.markdown(f"**{group_name}**")
+        for sp_id, sp_label in items.items():
+            default_val = sp_id in auto_sp
+            override_key = f"sp_{sp_id}"
+            checked = st.checkbox(sp_label, value=default_val, key=override_key)
+            if checked:
+                selected_sp_ids.append(sp_id)
+
+selling_points_text = "、".join(
+    SP_ID_TO_LABEL.get(sid, sid) for sid in selected_sp_ids
+) if selected_sp_ids else "MPChat 全功能"
+st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="sv-card">', unsafe_allow_html=True)
+st.markdown('<div class="sv-title">🔍 SEO 关键词</div>', unsafe_allow_html=True)
+st.caption("点击预设快速填充，或手动编辑（将被自然植入文章正文，提升 SEO 表现）")
+
+preset_cols = st.columns(len(KEYWORD_PRESETS))
+for i, preset in enumerate(KEYWORD_PRESETS):
+    with preset_cols[i]:
+        if st.button(f"{preset['label']}", key=f"kw_preset_{i}", use_container_width=True):
+            st.session_state["keywords_val"] = preset["keywords"]
+
+scenario_kw = selected_scenario.get("keywords", "")
+default_kw = st.session_state.get("keywords_val", scenario_kw)
+
+keywords = st.text_area(
+    "关键词（3-5个）",
+    value=default_kw,
+    height=60,
+    label_visibility="collapsed",
+)
+st.markdown('</div>', unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 生成按钮
+# ══════════════════════════════════════════════════════════════════════════════
+
+sp_summary = ", ".join(SP_ID_TO_LABEL.get(sid, sid).split("（")[0] for sid in selected_sp_ids[:4]) or "（请选择卖点）"
+if len(selected_sp_ids) > 4:
+    sp_summary += f" +{len(selected_sp_ids) - 4}"
+
+st.markdown(
+    f"<div style='text-align:center; color:#6b7280; font-size:0.9rem; margin-bottom:16px;'>"
+    f"<b>当前配置</b> · {language} · {selected_scenario_label} · {style_obj['id']} · 卖点: {sp_summary}"
+    f"</div>",
+    unsafe_allow_html=True
+)
+
+generate_btn = st.button("🚀 立即生成高转化软文", type="primary", use_container_width=True)
 
 st.divider()
+
 
 # ── 📦 批量生成 ──────────────────────────────────────────────────────────────
 with st.expander("📦 批量生成模式", expanded=False):
@@ -1420,7 +1482,7 @@ if "last_result" in st.session_state:
 
                         st.session_state["last_result"]["article"] = optimized
                         st.session_state["_pending_rerun"] = True
-                        st.success("✅ SEO 优化完成！页面即将刷新显示新文章...")
+                        st.toast('✅ SEO 优化完成！页面即将刷新...', icon='✨')
                     except Exception as e:
                         st.error(f"优化失败：{e}")
 
@@ -1502,7 +1564,7 @@ if "last_result" in st.session_state:
 
                         st.session_state["last_result"]["article"] = optimized
                         st.session_state["_pending_rerun"] = True
-                        st.success("✅ GEO 优化完成！页面即将刷新显示新文章...")
+                        st.toast('✅ GEO 优化完成！页面即将刷新...', icon='✨')
                     except Exception as e:
                         st.error(f"GEO 优化失败：{e}")
 
@@ -1580,10 +1642,7 @@ if "last_result" in st.session_state:
 
                         st.session_state["last_result"]["article"] = optimized
                         st.session_state["_pending_rerun"] = True
-                        st.success(
-                            f"✅ 双优化完成！（优化前：SEO {seo_s} / GEO {geo_s}）\n\n"
-                            f"页面即将刷新，请切回此 Tab 查看新分数。"
-                        )
+                        st.toast(f'✅ 双优化完成！（优化前：SEO {seo_s} / GEO {geo_s}）', icon='✨')
                     except Exception as e:
                         st.error(f"双优化失败：{e}")
 
@@ -1674,7 +1733,7 @@ AI 痕迹：
                     st.session_state["last_result"]["article"] = humanized
                     st.session_state["ai_detect_result"] = ""
                     st.session_state["_pending_rerun"] = True
-                    st.success("✅ 人性化改写完成！页面即将刷新显示新文章...")
+                    st.toast('✅ 人性化改写完成！页面即将刷新...', icon='✨')
                 except Exception as e:
                     st.error(f"人性化改写失败：{e}")
 

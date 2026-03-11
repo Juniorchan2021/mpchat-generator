@@ -298,3 +298,57 @@ MPChat-软文机器人/
 2. 使用 `st.secrets["GEMINI_API_KEY"]` 从 Streamlit Cloud Secrets 安全读取
 3. 回退到 `os.getenv("OPENAI_API_KEY")` 支持本地开发
 4. 用户可在侧边栏手动输入覆盖
+
+---
+
+## 10. 硅谷级 UI/UX 交互升级方案 (v4.1 规划)
+
+为了提升内部团队的使用体验，使其达到类似 Vercel、Linear、OpenAI 等硅谷顶尖科技公司的产品质感，我们将在 **不改动核心底层逻辑代码** 的前提下，通过 Streamlit 原生组件优化与自定义 CSS 注入，进行深度的 UI/UX 改造。
+
+### 10.1 视觉语言重塑 (Visual Language)
+
+- **极简主义主题 (Minimalist Theme)**：
+  - 采用高对比度、低饱和度的色彩规范（如 Vercel 的黑白灰体系，或 Stripe 的克制亮色）。
+  - 通过 `.streamlit/config.toml` 配置全局主题：`primaryColor="#000000"`, `backgroundColor="#FFFFFF"`, `secondaryBackgroundColor="#F7F9fa"`, `textColor="#111827"`。
+- **排版升级 (Typography)**：
+  - 全局字体替换为 **Inter** 或 **Roboto**（通过 CSS `@import` 引入），增强现代感与可读性。
+  - 严格控制字号层级，加大 H1/H2 的留白，弱化辅助说明文字（使用浅灰色）。
+- **沉浸式体验 (Immersion)**：
+  - 注入 CSS 隐藏 Streamlit 原生的汉堡菜单 (`#MainMenu`)、底部水印 (`footer`) 和顶部装饰红线，打造纯净的独立 App 观感。
+
+### 10.2 布局与空间管理 (Layout & Spacing)
+
+- **卡片式容器 (Card-based UI)**：
+  - 利用 `st.container()` 配合自定义 CSS 类，将功能模块（如「参数配置」、「SEO/GEO 面板」）包裹在带有细微阴影 (Box-shadow) 和圆角 (`border-radius: 12px`) 的白底卡片中，打破原生 Streamlit 扁平乏味的堆砌感。
+- **侧边栏瘦身与重组 (Sidebar Optimization)**：
+  - **侧边栏仅保留全局/底层设置**：如 AI 服务商选择、API Key 填写、系统状态监控。
+  - **主操作区移至中台**：将「写作场景」、「主打卖点」、「语言选择」等高频操作移至主界面的核心卡片区，使用 `st.columns()` 进行多列紧凑排版，减少用户视线在左右之间的频繁跳跃。
+- **渐进式披露 (Progressive Disclosure)**：
+  - 遵循「如无必要，勿增实体」原则。将「温度设置」、「备用图库 Key」、「自定义 Prompt」等低频高级选项，收纳进 `st.expander("⚙️ Advanced Settings")` 中，保持界面清爽。
+
+### 10.3 交互反馈增强 (Micro-interactions & Feedback)
+
+- **过程透明化 (Process Transparency)**：
+  - 废弃单调的 `st.spinner("正在生成...")`。
+  - 引入 `st.status("🚀 正在构建高转化软文...", expanded=True)`，在内部使用 `st.write()` 动态更新子任务状态（如：✅ 分析 SERP 数据... ⏳ 聚合多图库资源... ⏳ 驱动 LLM 引擎...），缓解长耗时任务带来的等待焦虑。
+- **轻量级提示 (Toast Notifications)**：
+  - 针对「复制成功」、「参数已重置」等非阻塞性操作，使用 `st.toast('内容已复制到剪贴板！', icon='📋')` 替代占用屏幕空间的 `st.success()`。
+- **防呆设计 (Fool-proofing)**：
+  - 在未填写 API Key 或未选择必填项时，禁用核心的「生成」按钮（或在点击时高亮提示缺失项），避免无效的 API 调用报错。
+
+### 10.4 数据可视化与仪表盘感 (Dashboard Feel)
+
+- **评分环形图与微动效**：
+  - SEO / GEO 评分不再使用纯文本。通过注入轻量级 HTML/CSS，将分数渲染为类似 Apple Watch 的**彩色环形进度条**（绿色 >90，黄色 70-89，红色 <70）。
+  - 使用 `st.metric(label="SEO 评分", value="92", delta="+15")` 直观展示一键优化前后的分数跃升。
+- **Segmented Control 风格标签页**：
+  - 通过 CSS 重写 `st.tabs()` 的样式，去除原生下划线，改为类似 macOS 或 iOS 的分段控制器（Segmented Control）样式，选中状态带有平滑的背景滑块过渡动画。
+
+### 10.5 行动号召 (CTA) 按钮重构
+
+- **按钮层级分明 (Button Hierarchy)**：
+  - **Primary CTA**（如「🚀 立即生成文章」）：使用品牌主色，全宽显示 (`use_container_width=True`)，视觉比重最大。
+  - **Secondary Actions**（如「一键双优化」、「生成配图」）：使用次级强调色或描边样式 (Outline)。
+  - **Tertiary Actions**（如「清空」、「复制」）：使用幽灵按钮 (Ghost button) 或纯文本链接样式，降低视觉干扰。
+
+通过以上无需修改底层 Python 逻辑的纯 UI/UX 层改造，MPChat 软文生成器将从一个「内部脚本工具」蜕变为具有硅谷企业级质感的「现代化 SaaS 平台」。
