@@ -94,14 +94,25 @@ def geo_score(article: str, faq_pairs: list[dict] | None = None) -> dict:
         issues.append("产品实体提及不足，建议全文统一使用 MPChat / MP Card / MP Wallet")
         tips.append("AI 搜索引擎通过实体识别建立知识图谱，确保名称一致且频繁出现")
 
-    # 6. FAQ presence
+    # 6. FAQ presence — parse from article text as primary source
     faq_count = len(faq_pairs) if faq_pairs else 0
-    has_faq_section = bool(re.search(r"(?:FAQ|常见问题|Q\s*[:：])", article, re.IGNORECASE))
-    if faq_count >= 5 or has_faq_section:
+    text_qa_count = len(re.findall(
+        r"(?:^|\n)\s*(?:\*\*)?Q\s*[:：]", article, re.IGNORECASE
+    ))
+    text_qa_count += len(re.findall(
+        r"(?:^|\n)\s*(?:\d+\.\s*)?(?:\*\*)?(?:问|问题)\s*[:：]", article
+    ))
+    faq_count = max(faq_count, text_qa_count)
+    has_faq_section = bool(re.search(r"(?:FAQ|常见问题|Q&A)", article, re.IGNORECASE))
+    if faq_count >= 5 or (has_faq_section and faq_count >= 3):
         score += 20
-    elif faq_count >= 3:
+    elif faq_count >= 3 or has_faq_section:
         score += 12
-        issues.append(f"FAQ 仅 {faq_count} 对，建议 5 对")
+        if faq_count < 5:
+            issues.append(f"FAQ {faq_count} 对，建议 5 对")
+    elif faq_count >= 1:
+        score += 6
+        issues.append(f"FAQ 仅 {faq_count} 对，远低于目标")
     else:
         issues.append("缺少 FAQ 段落（AI 搜索引擎高度依赖 Q&A 对）")
         tips.append("在文末加入 5 个 FAQ，每个答案 < 100 字")
@@ -225,9 +236,12 @@ def build_dual_optimize_prompt(
     seo_text = "\n".join(f"- {i}" for i in seo_issues) if seo_issues else "- 无严重问题"
     geo_text = "\n".join(f"- {i}" for i in geo_issues) if geo_issues else "- 无严重问题"
 
+    kw = keywords if keywords else "MPChat, 加密支付"
+
     return f"""请同时优化以下文章的 SEO 和 GEO 表现，目标：两项评分均达到 90-100 分。
 
 ⚠️ 关键约束：SEO 和 GEO 必须同时兼顾，不能为了提升一项而牺牲另一项。
+⚠️ 你必须输出完整文章，绝不能中途截断。文章必须有完整的结尾和 CTA。
 
 【当前 SEO 评分】{seo_stats.get('structure_score', 0)}/100
 【当前 GEO 评分】{geo_result['score']}/100
@@ -238,31 +252,38 @@ def build_dual_optimize_prompt(
 【GEO 问题】
 {geo_text}
 
-【SEO 优化要求（必须满足）】
-1. 1 个 H1（#）+ 至少 3 个 H2（##）
-2. 关键词密度 1-2%（关键词：{keywords if keywords else 'MPChat, 加密支付'}）
-3. 结尾有明确 CTA（引导访问 mp.net 下载 MPChat 或申请 MP Card）
-4. 总长度 800-1200 字，每段 ≤150 字
+═══ SEO 评分规则（满分 100，你必须拿到 90+）═══
+| 条件 | 分值 |
+|---|---|
+| 有 1 个 H1（# 标题）| 20 分 |
+| H2（## 标题）≥ 2 个 | 20 分 |
+| 含 CTA（"下载/注册/申请/立即/点击"等词）| 20 分 |
+| 总字数 600-1500 | 20 分 |
+| 关键词密度 0.5-3%（关键词：{kw}）| 20 分 |
 
-【GEO 优化要求（必须满足）】
-1. Answer-First：开头 40-100 字直接回答核心问题
-2. 问句 H2：至少 30% 的 H2 使用问句
-3. 数据引用：5+ 个带来源的统计数据
-4. 短段落：每段 2-3 句
-5. 权威引用：3+ 处「据 [来源] 研究显示」
-6. 实体一致：全文统一使用 MPChat / MP Card / MP Wallet
-7. 文末 FAQ：加入「## 常见问题」段落，包含 5 个 Q&A，每答案 < 100 字
+═══ GEO 评分规则（满分 100，你必须拿到 90+）═══
+| 条件 | 分值 |
+|---|---|
+| 开头段落 40-200 字直接回答核心问题 | 15 分 |
+| ≥30% 的 H2 用问句（以？结尾）| 15 分 |
+| 数据引用 ≥5 处（含 % 数字、据…报告）| 15 分 |
+| 无超长段落（每段 <300 字）| 10 分 |
+| 提及 ≥3 个产品实体（MPChat/MP Card/MP Wallet/mp.net）| 10 分 |
+| 文末有「## 常见问题」含 ≥5 个 Q&A | 20 分 |
+| 权威引用 ≥3 处（据…研究/报告显示）| 15 分 |
 
-【兼容策略】
-- H2 标题：用问句格式（满足 GEO）+ 含关键词（满足 SEO）
-- 段落：短段落（满足 GEO）+ 自然植入关键词（满足 SEO）
-- 数据引用同时提升 GEO 可信度和 SEO 内容质量
-- FAQ 段落同时满足 GEO 的 Q&A 需求和 SEO 的长尾关键词覆盖
+═══ 兼容策略 ═══
+- H2 标题 = 问句（GEO +15）+ 含关键词（SEO +20）
+- 每段 2-3 句 <300 字（GEO +10）+ 自然植入关键词（SEO +20）
+- 数据引用带来源（GEO +15）+ 提升内容质量（SEO）
+- FAQ 段落「## 常见问题」+ 5 个 Q: / A: 对（GEO +20）+ 长尾关键词（SEO）
+- 结尾 CTA「立即访问 mp.net 下载 MPChat」（SEO +20）
 
 【原文】
 {article}
 
-请直接输出优化后的完整文章（Markdown 格式），不要输出 JSON，不要解释修改内容。"""
+请直接输出优化后的完整文章（Markdown 格式），不要输出 JSON，不要解释修改内容。
+必须输出完整文章直到结尾的 CTA，不允许截断。"""
 
 
 def build_triple_optimize_prompt(
@@ -298,7 +319,8 @@ def build_triple_optimize_prompt(
 2. GEO 评分 ≥ 90
 3. AI 检测率 ≤ 30（GPTZero / Originality.ai 标准）
 
-⚠️ 关键约束：三者必须同时兼顾。SEO/GEO 的结构性元素是硬性要求，人性化在这些框架内进行。
+⚠️ 关键约束：三者必须同时兼顾。SEO/GEO 的结构性元素是硬性要求，人性化只改文风不改结构。
+⚠️ 你必须输出完整文章，绝不能中途截断。文章必须有完整的结尾和 CTA。
 
 【当前 SEO 评分】{seo_stats.get('structure_score', 0)}/100
 【当前 GEO 评分】{geo_result['score']}/100
@@ -309,46 +331,42 @@ def build_triple_optimize_prompt(
 【GEO 问题】
 {geo_text}
 
-══════════════════════════════════════════
-A. SEO 硬性要求（结构层，不可删减）
-══════════════════════════════════════════
-1. 1 个 H1（#）+ 至少 4 个 H2（##），标题含关键词
-2. 关键词密度 1-2%（关键词：{kw}）
-3. 结尾有明确 CTA（引导访问 mp.net 下载 MPChat / 申请 MP Card）
-4. 总长度 800-1200 字
-5. 每段 ≤ 150 字
+═══ SEO 评分规则（你必须拿到 90+）═══
+| 条件 | 分值 |
+|---|---|
+| 有 1 个 H1（# 标题）| 20 分 |
+| H2（## 标题）≥ 2 个 | 20 分 |
+| 含 CTA（"下载/注册/申请/立即/点击"等词）| 20 分 |
+| 总字数 600-1500 | 20 分 |
+| 关键词密度 0.5-3%（关键词：{kw}）| 20 分 |
 
-══════════════════════════════════════════
-B. GEO 硬性要求（结构层，不可删减）
-══════════════════════════════════════════
-1. Answer-First：开头 40-100 字直接回答核心问题
-2. 问句 H2：至少 30% 的 H2 用问句格式
-3. 数据引用：5+ 处带来源的统计数据
-4. 权威引用：3+ 处「据 [来源] 研究/报告显示」
-5. 实体一致：MPChat / MP Card / MP Wallet / mp.net 全文统一
-6. 文末 FAQ：## 常见问题 段落，含 5 个 Q&A
+═══ GEO 评分规则（你必须拿到 90+）═══
+| 条件 | 分值 |
+|---|---|
+| 开头段落 40-200 字直接回答核心问题 | 15 分 |
+| ≥30% 的 H2 用问句（以？结尾）| 15 分 |
+| 数据引用 ≥5 处（含 % 数字、据…报告）| 15 分 |
+| 无超长段落（每段 <300 字）| 10 分 |
+| 提及 ≥3 个产品实体（MPChat/MP Card/MP Wallet/mp.net）| 10 分 |
+| 文末有「## 常见问题」含 ≥5 个 Q&A | 20 分 |
+| 权威引用 ≥3 处（据…研究/报告显示）| 15 分 |
 
-══════════════════════════════════════════
-C. 人性化要求（在 A/B 框架内改写风格）
-══════════════════════════════════════════
-1. 用第一人称或口语化叙述（「说实话」「我个人的经验是」）
-2. 增加具体场景和故事细节（如在咖啡店付款、跨境转账经历）
-3. 打破 AI 句式模板：禁用「首先…其次…最后…」「值得注意的是」「总的来说」
-4. 句子长度变化：短句（<10 字）与长句交替
-5. 偶尔使用感叹句、反问句、省略句
-6. 数据引用用人性化表述（如「查了下 Chainalysis 的报告，发现...」而非「据 Chainalysis 报告显示」）
-7. H2 标题可以带个性（如「MP Card 到底香不香？」而非「MP Card 是否值得使用？」）
+═══ 人性化要求（只改文风，不删结构）═══
+1. 用口语化叙述包裹结构元素（如「说实话」「我个人的经验是」）
+2. 句子长度变化：短句与长句交替
+3. 禁用「首先…其次…最后…」「值得注意的是」「总的来说」
+4. 数据引用用个人化表述（如「查了下 Chainalysis 的报告，发现...」）
+5. H2 标题用口语化问句（如「MP Card 到底香不香？」）— 必须仍以？结尾
 
-══════════════════════════════════════════
-D. 三者兼容策略
-══════════════════════════════════════════
-- H2 标题 = 问句（GEO）+ 含关键词（SEO）+ 口语化（人性化）
-- 数据引用 = 带来源（GEO）+ 个人化表述包裹（人性化）
-- FAQ = 结构化 Q&A（GEO/SEO）+ 答案用口语写（人性化）
-- CTA = 明确行动引导（SEO）+ 用第一人称推荐语气（人性化）
-- 短段落 = 2-3 句（GEO）+ 偶尔单句段落增加节奏感（人性化）
+⚠️ 铁律：以下元素只能改写风格，绝不能删除：
+- 所有 H1/H2 标题（可改措辞，不可减少数量）
+- 所有数据引用和 % 数字
+- FAQ 段落（## 常见问题）及所有 Q&A 对
+- CTA 段落（必须含「下载/申请/立即」等触发词 + mp.net）
+- 产品实体名（MPChat / MP Card / MP Wallet / mp.net）
 
 【原文】
 {article}
 
-请直接输出优化后的完整文章（Markdown 格式），不要输出 JSON，不要解释修改内容。"""
+请直接输出优化后的完整文章（Markdown 格式），不要输出 JSON，不要解释修改内容。
+必须输出完整文章直到结尾的 CTA，不允许截断。"""

@@ -393,7 +393,7 @@ def _score_color(score: int) -> str:
 
 
 def _optimize_article(prompt: str, system_msg: str, spinner_text: str,
-                      success_msg: str, max_tokens: int = 8000,
+                      success_msg: str, max_tokens: int = 16000,
                       temperature: float = 0.6) -> str | None:
     """Shared LLM optimization handler for Module D.
     Calls LLM, strips fences, updates session state, shows status.
@@ -1251,7 +1251,7 @@ changelog 中请逐条说明做了什么修改（如：新增了 H2 段落「xxx
 
 def _ext_run_optimize(prompt: str, system_msg: str, spinner_text: str,
                       ext_art: str, ext_kw: str, opt_type: str,
-                      max_tokens: int = 8000, temperature: float = 0.6):
+                      max_tokens: int = 16000, temperature: float = 0.6):
     """Run optimization, parse result, save state with changelog."""
     seo_before = reading_stats(ext_art, ext_kw).get("structure_score", 0)
     geo_before = geo_score(ext_art, [])["score"]
@@ -1502,7 +1502,6 @@ with st.expander("📝 外部文章优化检测（粘贴已有文章进行 SEO /
                         "你是同时精通 SEO 和 GEO 的内容优化专家。请严格按要求的 JSON 格式输出。",
                         "🤖 正在联合优化 SEO + GEO（约 30 秒）...",
                         ext_art, ext_kw, "SEO + GEO 双优化",
-                        max_tokens=10000,
                     )
 
         # ── AI 检测 + 人性化 Tab ─────────────────────────────────
@@ -1599,7 +1598,7 @@ AI 痕迹：
                     "你是同时精通 SEO、GEO 和人性化写作的内容专家。请严格按要求的 JSON 格式输出。",
                     "🚀 三合一优化中（SEO + GEO + 人性化，约 40 秒）...",
                     ext_art, ext_kw, "三合一优化",
-                    max_tokens=10000, temperature=0.7,
+                    temperature=0.5,
                 )
 
         # ── 优化结果展示区 ────────────────────────────────────────
@@ -2198,7 +2197,6 @@ if "last_result" in st.session_state:
                     "你是同时精通 SEO 和 GEO（Generative Engine Optimization）的内容优化专家。你必须同时满足 SEO 和 GEO 两套评分标准，不能为了一项牺牲另一项。请直接输出优化后的 Markdown 文章。",
                     "🤖 正在联合优化 SEO + GEO（约 30 秒）...",
                     f"双优化完成！（优化前：SEO {seo_s} / GEO {geo_s}）文章已更新。",
-                    max_tokens=10000,
                 )
 
     # ── Tab: AI 检测 + 人性化 ────────────────────────────────────────────────
@@ -2302,7 +2300,7 @@ AI 痕迹：
                 "你是同时精通 SEO、GEO 和人性化写作的内容专家。你的目标是输出一篇 SEO ≥ 90、GEO ≥ 90、AI 检测率 ≤ 30 的文章。",
                 "🚀 三合一优化中（SEO + GEO + 人性化，约 40 秒）...",
                 f"三合一优化完成！（优化前：SEO {seo_before} / GEO {geo_before}）文章已更新。",
-                max_tokens=10000, temperature=0.7,
+                temperature=0.5,
             )
             if result_text:
                 st.session_state["ai_detect_result"] = ""

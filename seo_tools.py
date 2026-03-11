@@ -187,7 +187,9 @@ def reading_stats(article_text: str, keywords: str = "") -> dict:
         score += 20
     elif total_words > 300:
         score += 10
-    if kw_density:
+    if not keywords.strip():
+        score += 20
+    elif kw_density:
         avg_density = sum(v["density_pct"] for v in kw_density.values()) / len(kw_density)
         if 0.5 <= avg_density <= 3.0:
             score += 20
