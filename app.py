@@ -340,6 +340,100 @@ def build_user_prompt(language, scenario_label, audience_tag,
 """
 
 
+def _extract_json_field(raw: str, field: str) -> str | None:
+    """Extract a string field value from raw JSON text using regex (handles truncated JSON)."""
+    pattern = rf'"{field}"\s*:\s*"((?:[^"\\]|\\.)*)"'
+    m = re.search(pattern, raw, re.DOTALL)
+    if m:
+        val = m.group(1)
+        val = val.replace('\\n', '\n').replace('\\t', '\t')
+        val = val.replace('\\"', '"').replace('\\\\', '\\')
+        return val
+    return None
+
+
+def _extract_json_array(raw: str, field: str) -> list[str] | None:
+    """Extract a string array field from raw JSON text."""
+    pattern = rf'"{field}"\s*:\s*\[(.*?)\]'
+    m = re.search(pattern, raw, re.DOTALL)
+    if m:
+        return re.findall(r'"((?:[^"\\]|\\.)*)"', m.group(1))
+    return None
+
+
+def _robust_parse(raw: str) -> dict:
+    """Try multiple strategies to parse JSON from LLM output."""
+    # Strategy 1: direct parse
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Strategy 2: fix trailing commas
+    fixed = re.sub(r',\s*}', '}', raw)
+    fixed = re.sub(r',\s*]', ']', fixed)
+    try:
+        return json.loads(fixed)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Strategy 3: collapse real newlines that break JSON string values
+    try:
+        collapsed = raw.replace('\r\n', '\\n').replace('\r', '\\n').replace('\n', '\\n')
+        return json.loads(collapsed)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Strategy 4: regex extraction (handles truncated / malformed JSON)
+    article = _extract_json_field(raw, 'article')
+    if article:
+        result: dict = {"article": article}
+        for fld in ('seo_title', 'meta_description', 'slug_suggestion'):
+            val = _extract_json_field(raw, fld)
+            if val:
+                result[fld] = val
+        ta = _extract_json_array(raw, 'title_alternatives')
+        if ta:
+            result["title_alternatives"] = ta
+        ist = _extract_json_array(raw, 'image_search_terms')
+        if ist:
+            result["image_search_terms"] = ist
+        result.setdefault("seo_title", "MPChat — Live with Crypto")
+        result.setdefault("meta_description", "")
+        result.setdefault("slug_suggestion", "mpchat-article")
+        result.setdefault("image_prompts", [])
+        result.setdefault("image_search_terms", ["crypto payment", "digital finance"])
+        result.setdefault("title_alternatives", [])
+        return result
+
+    # Strategy 5: last resort — clean raw text and use as article
+    cleaned = raw
+    if '"article"' in cleaned:
+        a_start = cleaned.find('"article"')
+        colon = cleaned.find(':', a_start + 9)
+        if colon >= 0:
+            q_start = cleaned.find('"', colon)
+            if q_start >= 0:
+                cleaned = cleaned[q_start + 1:]
+                for end_marker in ('"image_prompts"', '"image_search_terms"',
+                                   '"title_alternatives"'):
+                    eidx = cleaned.find(end_marker)
+                    if eidx > 0:
+                        cleaned = cleaned[:cleaned.rfind('"', 0, eidx)].strip()
+                        break
+    cleaned = cleaned.replace('\\n', '\n').replace('\\t', '\t')
+    cleaned = cleaned.replace('\\"', '"').replace('\\\\', '\\')
+    return {
+        "seo_title": _extract_json_field(raw, 'seo_title') or "MPChat — Live with Crypto",
+        "meta_description": _extract_json_field(raw, 'meta_description') or "",
+        "slug_suggestion": _extract_json_field(raw, 'slug_suggestion') or "mpchat-article",
+        "article": cleaned,
+        "image_prompts": [],
+        "image_search_terms": _extract_json_array(raw, 'image_search_terms') or ["crypto payment"],
+        "title_alternatives": _extract_json_array(raw, 'title_alternatives') or [],
+    }
+
+
 def generate_article(client, model, language, scenario_label, audience_tag,
                      selling_points_text, style_name, style_instruction,
                      keywords, web_content=""):
@@ -355,7 +449,7 @@ def generate_article(client, model, language, scenario_label, audience_tag,
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.82,
-            max_tokens=4000,
+            max_tokens=16384,
             response_format={"type": "json_object"},
         )
     except Exception:
@@ -366,7 +460,7 @@ def generate_article(client, model, language, scenario_label, audience_tag,
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.82,
-            max_tokens=4000,
+            max_tokens=16384,
         )
     raw = response.choices[0].message.content.strip()
     if raw.startswith("```"):
@@ -382,22 +476,7 @@ def generate_article(client, model, language, scenario_label, audience_tag,
         if match:
             raw = match.group(0)
 
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        raw_fixed = re.sub(r',\s*}', '}', raw)
-        raw_fixed = re.sub(r',\s*]', ']', raw_fixed)
-        try:
-            return json.loads(raw_fixed)
-        except json.JSONDecodeError:
-            return {
-                "seo_title": "MPChat — Live with Crypto",
-                "meta_description": "AI 生成内容解析失败，请重试。",
-                "slug_suggestion": "mpchat-article",
-                "article": raw,
-                "image_prompts": [],
-                "image_search_terms": ["crypto payment", "digital finance"],
-            }
+    return _robust_parse(raw)
 
 
 def insert_images_into_article(article_text: str, images: list[dict],
