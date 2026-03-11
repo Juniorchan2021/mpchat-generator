@@ -523,15 +523,40 @@ Module F 位于批量生成模块之后、单篇生成输出之前，作为 `st.
 | ⚡ 双优化 | SEO + GEO 双评分环 + 一键联合优化 | `build_dual_optimize_prompt()` |
 | 🤖 AI 检测 | AI 痕迹检测 + 人性化改写 + 三合一优化 | `build_triple_optimize_prompt()` |
 
+**优化结果展示区（v4.1 UX 升级）：**
+
+优化操作完成后，在 Tab 下方自动展示结果区块，包含三部分：
+
+1. **评分对比卡片** — 两列显示优化前/后的 SEO 和 GEO 评分，用绿色/红色箭头标注分数变化（如 `50 → 92 ↑42`）
+2. **修改说明列表** — LLM 逐条输出具体改了什么，用颜色标签区分类型：
+   - 绿色 `[新增]` — 新增内容（H2 段落、FAQ、CTA 等）
+   - 蓝色 `[优化]` — 改写优化（关键词密度、段落精简等）
+   - 橙色 `[调整]` — 结构调整（段落拆分、顺序变化等）
+3. **优化后全文预览** — 渲染完整 Markdown 文章供用户阅读
+4. **操作按钮** — 「下载优化后文章」（.md 文件）、「撤销优化，恢复原文」、代码视图（方便复制）
+
+**JSON 输出格式：** 所有优化 prompt 要求 LLM 以 JSON 返回：
+```json
+{
+  "optimized_article": "完整 Markdown 文章",
+  "changelog": ["修改说明1", "修改说明2", "..."]
+}
+```
+解析时使用多策略兜底（直接解析 → 修复尾逗号 → 正则提取），若全部失败则将原始输出作为纯文章处理。
+
 ### 12.4 状态管理
 
 Module F 使用独立的 session state key，避免与生成流程冲突：
 
 | Key | 用途 |
 |-----|------|
-| `ext_article` | 当前外部文章内容（优化后自动更新） |
+| `ext_article` | 当前文章内容（优化后自动更新） |
+| `ext_original` | 用户最初粘贴的原文（不随优化改变，用于撤销恢复） |
 | `ext_keywords` | 当前目标关键词 |
 | `ext_detect_result` | AI 检测结果缓存 |
+| `ext_changelog` | 最近一次优化的修改说明列表 |
+| `ext_score_before` | 优化前的 SEO/GEO 评分（用于对比展示） |
+| `ext_opt_type` | 最近一次优化的类型标签（如「SEO 优化」「三合一优化」） |
 
 ### 12.5 与 Module D 的差异
 
@@ -539,7 +564,9 @@ Module F 使用独立的 session state key，避免与生成流程冲突：
 - **独立状态**：所有按钮 key 加 `ext_` 前缀，状态互不影响
 - **FAQ 默认为空**：外部文章无法自动提取 FAQ pairs，`geo_score()` 传入空列表
 - **通用 CTA**：SEO 优化 prompt 使用 `mp.net` 作为 CTA 目标，但不强制 MPChat 产品线
+- **修改说明 + 对比视图**：Module D 仅显示 `st.success()`，Module F 完整展示 changelog 和前后评分对比
+- **撤销恢复**：Module F 保留原文，支持一键回退；Module D 直接覆盖 `last_result`
 
 ### 12.6 影响文件
 
-- `app.py`：新增 Module F section（~250 行）
+- `app.py`：Module F section（~400 行），含 helper 函数 `_parse_opt_result()`、`_render_changelog()`、`_render_score_comparison()`、`_ext_run_optimize()`

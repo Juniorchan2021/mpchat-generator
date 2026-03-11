@@ -372,6 +372,53 @@ def build_user_prompt(language, scenario_label, audience_tag,
 """
 
 
+def _strip_code_fences(text: str) -> str:
+    """Remove wrapping ```...``` fences from LLM output."""
+    if text.startswith("```"):
+        lines = text.split("\n")
+        inner = "\n".join(lines[1:])
+        if "```" in inner:
+            return inner[:inner.rfind("```")].strip()
+        return inner.strip()
+    return text
+
+
+def _score_color(score: int) -> str:
+    """Return color hex for score: green ≥80, yellow ≥50, red <50."""
+    if score >= 80:
+        return "#00c853"
+    if score >= 50:
+        return "#fbbf24"
+    return "#f87171"
+
+
+def _optimize_article(prompt: str, system_msg: str, spinner_text: str,
+                      success_msg: str, max_tokens: int = 8000,
+                      temperature: float = 0.6) -> str | None:
+    """Shared LLM optimization handler for Module D.
+    Calls LLM, strips fences, updates session state, shows status.
+    Returns optimized text on success, None on failure."""
+    with st.spinner(spinner_text):
+        try:
+            client = get_client(api_key_input, base_url_input)
+            resp = client.chat.completions.create(
+                model=model_input.strip() if model_input else "gemini-2.5-flash",
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            optimized = _strip_code_fences(resp.choices[0].message.content.strip())
+            st.session_state["last_result"]["article"] = optimized
+            st.success(success_msg)
+            return optimized
+        except Exception as e:
+            st.error(f"优化失败：{e}")
+            return None
+
+
 def _extract_json_field(raw: str, field: str) -> str | None:
     """Extract a string field value from raw JSON text using regex (handles truncated JSON)."""
     pattern = rf'"{field}"\s*:\s*"((?:[^"\\]|\\.)*)"'
@@ -495,14 +542,7 @@ def generate_article(client, model, language, scenario_label, audience_tag,
             temperature=0.82,
             max_tokens=16384,
         )
-    raw = response.choices[0].message.content.strip()
-    if raw.startswith("```"):
-        lines = raw.split("\n")
-        inner = "\n".join(lines[1:])
-        if "```" in inner:
-            raw = inner[:inner.rfind("```")].strip()
-        else:
-            raw = inner.strip()
+    raw = _strip_code_fences(response.choices[0].message.content.strip())
 
     if not raw.startswith("{"):
         match = re.search(r'\{[\s\S]*\}', raw)
@@ -929,7 +969,6 @@ with st.container(border=True):
             style_keys,
             index=hint_index,
             label_visibility="collapsed",
-            format_func=lambda k: f"{k}",
         )
         style_obj = ARTICLE_STYLES[selected_style_key]
 
@@ -1122,6 +1161,130 @@ with st.expander("📦 批量生成模式", expanded=False):
 # ══════════════════════════════════════════════════════════════════════════════
 # 📝 模块 F — 外部文章优化检测
 # ══════════════════════════════════════════════════════════════════════════════
+
+def _parse_opt_result(raw: str) -> tuple[str, list[str]]:
+    """Parse LLM optimization output: returns (article, changelog).
+    Tries JSON first, falls back to plain text."""
+    cleaned = _strip_code_fences(raw.strip())
+    try:
+        data = json.loads(cleaned)
+        if isinstance(data, dict):
+            art = data.get("optimized_article", "")
+            cl = data.get("changelog", [])
+            if art:
+                return art, cl if isinstance(cl, list) else []
+    except (json.JSONDecodeError, ValueError):
+        pass
+    fixed = re.sub(r',\s*}', '}', cleaned)
+    fixed = re.sub(r',\s*]', ']', fixed)
+    try:
+        data = json.loads(fixed)
+        if isinstance(data, dict):
+            art = data.get("optimized_article", "")
+            cl = data.get("changelog", [])
+            if art:
+                return art, cl if isinstance(cl, list) else []
+    except (json.JSONDecodeError, ValueError):
+        pass
+    m = re.search(r'"optimized_article"\s*:\s*"((?:[^"\\]|\\.)*)"', cleaned, re.DOTALL)
+    if m:
+        art = m.group(1).replace("\\n", "\n").replace('\\"', '"')
+        cl_match = re.findall(r'"changelog"\s*:\s*\[(.*?)\]', cleaned, re.DOTALL)
+        cl = []
+        if cl_match:
+            cl = re.findall(r'"((?:[^"\\]|\\.)*)"', cl_match[0])
+        return art, cl
+    return cleaned, []
+
+
+def _render_changelog(changelog: list[str]):
+    """Render changelog items with color-coded tags."""
+    if not changelog:
+        return
+    st.markdown("**📋 修改说明：**")
+    for item in changelog:
+        item_lower = item.lower()
+        if any(k in item_lower for k in ("新增", "添加", "加入", "补充", "add")):
+            tag = '<span style="background:#064e3b;color:#6ee7b7;padding:2px 8px;border-radius:4px;font-size:0.75rem;margin-right:6px;">新增</span>'
+        elif any(k in item_lower for k in ("调整", "拆分", "移动", "重组", "restructur")):
+            tag = '<span style="background:#78350f;color:#fbbf24;padding:2px 8px;border-radius:4px;font-size:0.75rem;margin-right:6px;">调整</span>'
+        else:
+            tag = '<span style="background:#1e3a5f;color:#93c5fd;padding:2px 8px;border-radius:4px;font-size:0.75rem;margin-right:6px;">优化</span>'
+        st.markdown(f"{tag} {item}", unsafe_allow_html=True)
+
+
+def _render_score_comparison(label: str, before: int, after: int):
+    """Render a before->after score comparison card."""
+    delta = after - before
+    if delta > 0:
+        arrow = f'<span style="color:#00c853;font-weight:bold;"> ↑{delta}</span>'
+    elif delta < 0:
+        arrow = f'<span style="color:#f87171;font-weight:bold;"> ↓{abs(delta)}</span>'
+    else:
+        arrow = '<span style="color:#6b7280;"> →0</span>'
+    bc = _score_color(before)
+    ac = _score_color(after)
+    st.markdown(
+        f"<div style='text-align:center;padding:8px;background:rgba(255,255,255,0.03);border-radius:8px;'>"
+        f"<div style='font-size:0.75rem;color:#6b7280;margin-bottom:4px;'>{label}</div>"
+        f"<span style='color:{bc};font-size:1.4rem;font-weight:bold;'>{before}</span>"
+        f" <span style='color:#6b7280;'>→</span> "
+        f"<span style='color:{ac};font-size:1.4rem;font-weight:bold;'>{after}</span>"
+        f"{arrow}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+_EXT_OPT_JSON_INSTRUCTION = """
+
+请以 JSON 格式输出，包含两个字段：
+{
+  "optimized_article": "优化后的完整 Markdown 文章",
+  "changelog": [
+    "具体修改1的描述",
+    "具体修改2的描述",
+    "..."
+  ]
+}
+changelog 中请逐条说明做了什么修改（如：新增了 H2 段落「xxx」、在第 3 段植入了关键词 xxx、结尾新增 CTA 引导访问 mp.net）。"""
+
+
+def _ext_run_optimize(prompt: str, system_msg: str, spinner_text: str,
+                      ext_art: str, ext_kw: str, opt_type: str,
+                      max_tokens: int = 8000, temperature: float = 0.6):
+    """Run optimization, parse result, save state with changelog."""
+    seo_before = reading_stats(ext_art, ext_kw).get("structure_score", 0)
+    geo_before = geo_score(ext_art, [])["score"]
+
+    with st.spinner(spinner_text):
+        try:
+            client = get_client(api_key_input, base_url_input)
+            response = client.chat.completions.create(
+                model=model_input.strip() if model_input else "gemini-2.5-flash",
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            raw = response.choices[0].message.content.strip()
+            optimized, changelog = _parse_opt_result(raw)
+
+            if not st.session_state.get("ext_original"):
+                st.session_state["ext_original"] = ext_art
+            st.session_state["ext_article"] = optimized
+            st.session_state["ext_changelog"] = changelog
+            st.session_state["ext_score_before"] = {
+                "seo": seo_before, "geo": geo_before
+            }
+            st.session_state["ext_opt_type"] = opt_type
+            st.session_state["ext_detect_result"] = ""
+            st.success(f"{opt_type}完成！请查看下方的修改说明和优化后文章。")
+        except Exception as e:
+            st.error(f"{opt_type}失败：{e}")
+
+
 with st.expander("📝 外部文章优化检测（粘贴已有文章进行 SEO / GEO / AI 检测）", expanded=False):
     st.caption("将官方博客或其他渠道的文章粘贴到此处，即可使用完整的优化检测工具链")
 
@@ -1152,27 +1315,26 @@ with st.expander("📝 外部文章优化检测（粘贴已有文章进行 SEO /
 
     if ext_analyze_btn and ext_article_input.strip():
         st.session_state["ext_article"] = ext_article_input.strip()
+        st.session_state["ext_original"] = ext_article_input.strip()
         st.session_state["ext_keywords"] = ext_kw_input.strip()
         st.session_state["ext_detect_result"] = ""
+        st.session_state["ext_changelog"] = []
+        st.session_state["ext_score_before"] = {}
+        st.session_state["ext_opt_type"] = ""
 
     if ext_clear_btn:
-        st.session_state["ext_article"] = ""
-        st.session_state["ext_keywords"] = ""
-        st.session_state["ext_detect_result"] = ""
-
-    def _strip_code_fences(text: str) -> str:
-        """Remove wrapping ```markdown ... ``` fences from LLM output."""
-        if text.startswith("```"):
-            lines = text.split("\n")
-            inner = "\n".join(lines[1:])
-            if "```" in inner:
-                return inner[:inner.rfind("```")].strip()
-            return inner.strip()
-        return text
+        for k in ("ext_article", "ext_original", "ext_keywords",
+                   "ext_detect_result", "ext_opt_type"):
+            st.session_state[k] = ""
+        st.session_state["ext_changelog"] = []
+        st.session_state["ext_score_before"] = {}
 
     if st.session_state.get("ext_article"):
         ext_art = st.session_state["ext_article"]
         ext_kw = st.session_state.get("ext_keywords", "")
+
+        ext_stats = reading_stats(ext_art, ext_kw)
+        ext_geo_data = geo_score(ext_art, [])
 
         st.divider()
 
@@ -1182,11 +1344,7 @@ with st.expander("📝 外部文章优化检测（粘贴已有文章进行 SEO /
 
         # ── SEO 评分 Tab ─────────────────────────────────────────
         with ext_tab_seo:
-            ext_stats = reading_stats(ext_art, ext_kw)
             ext_seo_score = ext_stats["structure_score"]
-            ext_seo_color = "#00c853" if ext_seo_score >= 80 else (
-                "#fbbf24" if ext_seo_score >= 50 else "#f87171"
-            )
 
             em1, em2, em3, em4 = st.columns(4)
             with em1:
@@ -1196,17 +1354,15 @@ with st.expander("📝 外部文章优化检测（粘贴已有文章进行 SEO /
             with em3:
                 st.metric("H2 段落数", f"{ext_stats['h2_count']}")
             with em4:
+                sc = _score_color(ext_seo_score)
                 st.markdown(
                     f"<div style='text-align:center;'>"
-                    f"<div class='score-ring' style='border:3px solid {ext_seo_color};color:{ext_seo_color};'>"
+                    f"<div class='score-ring' style='border:3px solid {sc};color:{sc};'>"
                     f"{ext_seo_score}</div>"
                     f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>SEO 评分</div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
+                    f"</div>", unsafe_allow_html=True)
 
             st.markdown(f"**CTA 检测：** {'✅ 包含 CTA' if ext_stats['has_cta'] else '❌ 缺少 CTA'}")
-
             if ext_stats["keyword_density"]:
                 st.markdown("**关键词密度分析：**")
                 for kw, info in ext_stats["keyword_density"].items():
@@ -1244,34 +1400,20 @@ with st.expander("📝 外部文章优化检测（粘贴已有文章进行 SEO /
 
 【原文】
 {ext_art}
+{_EXT_OPT_JSON_INSTRUCTION}"""
 
-请直接输出优化后的完整文章（Markdown 格式），不要输出 JSON，不要解释修改内容。"""
-
-                    with st.spinner("🤖 正在 SEO 优化中..."):
-                        try:
-                            opt_c = get_client(api_key_input, base_url_input)
-                            opt_r = opt_c.chat.completions.create(
-                                model=model_input.strip() if model_input else "gemini-2.5-flash",
-                                messages=[
-                                    {"role": "system", "content": "你是 SEO 优化专家，请直接输出优化后的 Markdown 文章。"},
-                                    {"role": "user", "content": ext_seo_prompt},
-                                ],
-                                temperature=0.6,
-                                max_tokens=8000,
-                            )
-                            optimized = _strip_code_fences(opt_r.choices[0].message.content.strip())
-                            st.session_state["ext_article"] = optimized
-                            st.success("SEO 优化完成！文章已更新，可切换其他 Tab 查看新评分。")
-                        except Exception as e:
-                            st.error(f"优化失败：{e}")
+                    _ext_run_optimize(
+                        ext_seo_prompt,
+                        "你是 SEO 优化专家。请严格按要求的 JSON 格式输出。",
+                        "🤖 正在 SEO 优化中...",
+                        ext_art, ext_kw, "SEO 优化",
+                    )
 
         # ── GEO 评分 Tab ─────────────────────────────────────────
         with ext_tab_geo:
-            ext_geo_result = geo_score(ext_art, [])
+            ext_geo_result = ext_geo_data
             ext_g_score = ext_geo_result["score"]
-            ext_g_color = "#00c853" if ext_g_score >= 80 else (
-                "#fbbf24" if ext_g_score >= 50 else "#f87171"
-            )
+            ext_g_color = _score_color(ext_g_score)
 
             egc1, egc2 = st.columns([1, 3])
             with egc1:
@@ -1280,9 +1422,7 @@ with st.expander("📝 外部文章优化检测（粘贴已有文章进行 SEO /
                     f"<div class='score-ring' style='border:3px solid {ext_g_color};color:{ext_g_color};font-size:2rem;'>"
                     f"{ext_g_score}</div>"
                     f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>GEO 评分</div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
+                    f"</div>", unsafe_allow_html=True)
             with egc2:
                 ed = ext_geo_result["details"]
                 st.markdown(f"""
@@ -1296,7 +1436,6 @@ with st.expander("📝 外部文章优化检测（粘贴已有文章进行 SEO /
 | FAQ 数量 | {ed['faq_count']} 对 |
 | 权威引用 | {ed['authority_refs']} 处 |
 """)
-
             if ext_geo_result["issues"]:
                 st.markdown("**需改进的问题：**")
                 for iss in ext_geo_result["issues"]:
@@ -1311,89 +1450,60 @@ with st.expander("📝 外部文章优化检测（粘贴已有文章进行 SEO /
                 st.markdown(f"**当前 GEO 评分 {ext_g_score}/100，建议优化到 90+**")
                 if st.button("🧠 一键 GEO 优化到 90+", use_container_width=True, key="ext_geo_opt_btn"):
                     ext_geo_prompt = build_geo_optimize_prompt(ext_art, ext_geo_result, keywords=ext_kw)
-                    with st.spinner("🤖 正在 GEO 优化中..."):
-                        try:
-                            opt_c = get_client(api_key_input, base_url_input)
-                            opt_r = opt_c.chat.completions.create(
-                                model=model_input.strip() if model_input else "gemini-2.5-flash",
-                                messages=[
-                                    {"role": "system", "content": "你是 GEO（Generative Engine Optimization）专家，专门优化内容以提升在 ChatGPT、Perplexity、Gemini 等 AI 搜索引擎中的可见性。请直接输出优化后的 Markdown 文章。"},
-                                    {"role": "user", "content": ext_geo_prompt},
-                                ],
-                                temperature=0.6,
-                                max_tokens=8000,
-                            )
-                            optimized = _strip_code_fences(opt_r.choices[0].message.content.strip())
-                            st.session_state["ext_article"] = optimized
-                            st.success("GEO 优化完成！文章已更新，可切换其他 Tab 查看新评分。")
-                        except Exception as e:
-                            st.error(f"GEO 优化失败：{e}")
+                    ext_geo_prompt += _EXT_OPT_JSON_INSTRUCTION
+                    _ext_run_optimize(
+                        ext_geo_prompt,
+                        "你是 GEO（Generative Engine Optimization）专家。请严格按要求的 JSON 格式输出。",
+                        "🤖 正在 GEO 优化中...",
+                        ext_art, ext_kw, "GEO 优化",
+                    )
 
         # ── 双优化 Tab ───────────────────────────────────────────
         with ext_tab_dual:
             st.markdown("**SEO + GEO 联合优化**")
             st.caption("同时将 SEO 和 GEO 评分优化到 90+")
-
-            ext_stats_d = reading_stats(ext_art, ext_kw)
-            ext_geo_d = geo_score(ext_art, [])
+            ext_seo_sd = ext_stats["structure_score"]
+            ext_geo_sd = ext_geo_data["score"]
 
             edc1, edc2 = st.columns(2)
-            ext_seo_sd = ext_stats_d["structure_score"]
-            ext_geo_sd = ext_geo_d["score"]
-            esc = "#00c853" if ext_seo_sd >= 90 else ("#fbbf24" if ext_seo_sd >= 50 else "#f87171")
-            egc = "#00c853" if ext_geo_sd >= 90 else ("#fbbf24" if ext_geo_sd >= 50 else "#f87171")
-
             with edc1:
+                sc = _score_color(ext_seo_sd)
                 st.markdown(
                     f"<div style='text-align:center;'>"
-                    f"<div class='score-ring' style='border:3px solid {esc};color:{esc};font-size:1.8rem;'>"
+                    f"<div class='score-ring' style='border:3px solid {sc};color:{sc};font-size:1.8rem;'>"
                     f"{ext_seo_sd}</div>"
                     f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>SEO 评分</div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
+                    f"</div>", unsafe_allow_html=True)
             with edc2:
+                gc = _score_color(ext_geo_sd)
                 st.markdown(
                     f"<div style='text-align:center;'>"
-                    f"<div class='score-ring' style='border:3px solid {egc};color:{egc};font-size:1.8rem;'>"
+                    f"<div class='score-ring' style='border:3px solid {gc};color:{gc};font-size:1.8rem;'>"
                     f"{ext_geo_sd}</div>"
                     f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>GEO 评分</div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
+                    f"</div>", unsafe_allow_html=True)
 
-            ext_both_pass = ext_seo_sd >= 90 and ext_geo_sd >= 90
-            if ext_both_pass:
+            if ext_seo_sd >= 90 and ext_geo_sd >= 90:
                 st.success("SEO 和 GEO 评分均已达到 90+，无需优化！")
             else:
-                ext_shortfalls = []
+                shortfalls = []
                 if ext_seo_sd < 90:
-                    ext_shortfalls.append(f"SEO {ext_seo_sd} → 90+")
+                    shortfalls.append(f"SEO {ext_seo_sd} → 90+")
                 if ext_geo_sd < 90:
-                    ext_shortfalls.append(f"GEO {ext_geo_sd} → 90+")
-                st.markdown(f"**目标：** {' & '.join(ext_shortfalls)}")
-
+                    shortfalls.append(f"GEO {ext_geo_sd} → 90+")
+                st.markdown(f"**目标：** {' & '.join(shortfalls)}")
                 if st.button("⚡ 一键 SEO + GEO 双优化到 90+", use_container_width=True, key="ext_dual_opt_btn"):
                     ext_dual_prompt = build_dual_optimize_prompt(
-                        ext_art, ext_stats_d, ext_geo_d, keywords=ext_kw,
+                        ext_art, ext_stats, ext_geo_data, keywords=ext_kw,
                     )
-                    with st.spinner("🤖 正在联合优化 SEO + GEO（约 30 秒）..."):
-                        try:
-                            dual_c = get_client(api_key_input, base_url_input)
-                            dual_r = dual_c.chat.completions.create(
-                                model=model_input.strip() if model_input else "gemini-2.5-flash",
-                                messages=[
-                                    {"role": "system", "content": "你是同时精通 SEO 和 GEO（Generative Engine Optimization）的内容优化专家。你必须同时满足 SEO 和 GEO 两套评分标准，不能为了一项牺牲另一项。请直接输出优化后的 Markdown 文章。"},
-                                    {"role": "user", "content": ext_dual_prompt},
-                                ],
-                                temperature=0.6,
-                                max_tokens=10000,
-                            )
-                            optimized = _strip_code_fences(dual_r.choices[0].message.content.strip())
-                            st.session_state["ext_article"] = optimized
-                            st.success(f"双优化完成！（优化前：SEO {ext_seo_sd} / GEO {ext_geo_sd}）文章已更新。")
-                        except Exception as e:
-                            st.error(f"双优化失败：{e}")
+                    ext_dual_prompt += _EXT_OPT_JSON_INSTRUCTION
+                    _ext_run_optimize(
+                        ext_dual_prompt,
+                        "你是同时精通 SEO 和 GEO 的内容优化专家。请严格按要求的 JSON 格式输出。",
+                        "🤖 正在联合优化 SEO + GEO（约 30 秒）...",
+                        ext_art, ext_kw, "SEO + GEO 双优化",
+                        max_tokens=10000,
+                    )
 
         # ── AI 检测 + 人性化 Tab ─────────────────────────────────
         with ext_tab_ai:
@@ -1461,62 +1571,93 @@ AI 痕迹：
 人性化改写技巧（在保留以上结构的前提下应用）：
 - 口语化、个人化表达（如「说实话」「我自己的体验是」）
 - 增加主观感受和具体细节
-- 打破 AI 固定句式（避免「首先…其次…最后…」等模板）
-- 变化句子长度（短句长句交替，偶尔用感叹句、反问句）
-- 适当使用不完美表达（口语缩写、省略）
+- 打破 AI 固定句式
+- 变化句子长度
+- 适当使用不完美表达
 - 增加故事元素和场景描写
 
 【原文】
 {ext_art}
+{_EXT_OPT_JSON_INSTRUCTION}"""
 
-请直接输出改写后的完整文章（Markdown 格式），保留所有 H1/H2/FAQ/CTA 结构。"""
-
-                with st.spinner("✍️ 正在人性化改写中..."):
-                    try:
-                        hum_c = get_client(api_key_input, base_url_input)
-                        hum_r = hum_c.chat.completions.create(
-                            model=model_input.strip() if model_input else "gemini-2.5-flash",
-                            messages=[
-                                {"role": "system", "content": "你是一位资深的人类内容编辑。改写时必须保留文章的 H1/H2 标题结构、FAQ 段落、CTA、数据引用和关键词分布，只改写行文风格使之更自然。"},
-                                {"role": "user", "content": ext_hum_prompt},
-                            ],
-                            temperature=0.8,
-                            max_tokens=8000,
-                        )
-                        humanized = _strip_code_fences(hum_r.choices[0].message.content.strip())
-                        st.session_state["ext_article"] = humanized
-                        st.session_state["ext_detect_result"] = ""
-                        st.success("人性化改写完成！文章已更新，可切换其他 Tab 查看新评分。")
-                    except Exception as e:
-                        st.error(f"人性化改写失败：{e}")
+                _ext_run_optimize(
+                    ext_hum_prompt,
+                    "你是一位资深的人类内容编辑。请严格按要求的 JSON 格式输出。改写时保留所有 H1/H2/FAQ/CTA 结构。",
+                    "✍️ 正在人性化改写中...",
+                    ext_art, ext_kw, "人性化改写",
+                    temperature=0.8,
+                )
 
             if ext_do_tri:
-                ext_geo_tri = geo_score(ext_art, [])
-                ext_stats_tri = reading_stats(ext_art, ext_kw)
                 ext_triple_prompt = build_triple_optimize_prompt(
-                    ext_art, ext_stats_tri, ext_geo_tri,
+                    ext_art, ext_stats, ext_geo_data,
                     keywords=ext_kw if ext_kw else "MPChat, mp.net",
                 )
-                with st.spinner("🚀 三合一优化中（SEO + GEO + 人性化，约 40 秒）..."):
-                    try:
-                        tri_c = get_client(api_key_input, base_url_input)
-                        tri_r = tri_c.chat.completions.create(
-                            model=model_input.strip() if model_input else "gemini-2.5-flash",
-                            messages=[
-                                {"role": "system", "content": "你是同时精通 SEO、GEO 和人性化写作的内容专家。你的目标是输出一篇 SEO ≥ 90、GEO ≥ 90、AI 检测率 ≤ 30 的文章。"},
-                                {"role": "user", "content": ext_triple_prompt},
-                            ],
-                            temperature=0.7,
-                            max_tokens=10000,
-                        )
-                        tripled = _strip_code_fences(tri_r.choices[0].message.content.strip())
-                        seo_b = ext_stats_tri.get("structure_score", 0)
-                        geo_b = ext_geo_tri["score"]
-                        st.session_state["ext_article"] = tripled
-                        st.session_state["ext_detect_result"] = ""
-                        st.success(f"三合一优化完成！（优化前：SEO {seo_b} / GEO {geo_b}）文章已更新。")
-                    except Exception as e:
-                        st.error(f"三合一优化失败：{e}")
+                ext_triple_prompt += _EXT_OPT_JSON_INSTRUCTION
+                _ext_run_optimize(
+                    ext_triple_prompt,
+                    "你是同时精通 SEO、GEO 和人性化写作的内容专家。请严格按要求的 JSON 格式输出。",
+                    "🚀 三合一优化中（SEO + GEO + 人性化，约 40 秒）...",
+                    ext_art, ext_kw, "三合一优化",
+                    max_tokens=10000, temperature=0.7,
+                )
+
+        # ── 优化结果展示区 ────────────────────────────────────────
+        ext_changelog = st.session_state.get("ext_changelog", [])
+        ext_score_before = st.session_state.get("ext_score_before", {})
+        ext_opt_type = st.session_state.get("ext_opt_type", "")
+
+        if ext_changelog or ext_score_before:
+            st.divider()
+            st.markdown(f'<div class="output-card-title">📊 {ext_opt_type} — 优化结果</div>',
+                        unsafe_allow_html=True)
+
+            if ext_score_before:
+                sc1, sc2 = st.columns(2)
+                with sc1:
+                    _render_score_comparison(
+                        "SEO 评分",
+                        ext_score_before.get("seo", 0),
+                        ext_stats["structure_score"],
+                    )
+                with sc2:
+                    _render_score_comparison(
+                        "GEO 评分",
+                        ext_score_before.get("geo", 0),
+                        ext_geo_data["score"],
+                    )
+
+            if ext_changelog:
+                st.markdown("")
+                _render_changelog(ext_changelog)
+
+            st.divider()
+            st.markdown("**优化后文章全文：**")
+            st.markdown(ext_art)
+
+            st.divider()
+            act1, act2 = st.columns(2)
+            with act1:
+                st.download_button(
+                    "📋 下载优化后文章",
+                    ext_art,
+                    file_name="optimized_article.md",
+                    mime="text/markdown",
+                    use_container_width=True,
+                    key="ext_download_btn",
+                )
+            with act2:
+                if st.session_state.get("ext_original"):
+                    if st.button("↩️ 撤销优化，恢复原文", use_container_width=True, key="ext_undo_btn"):
+                        st.session_state["ext_article"] = st.session_state["ext_original"]
+                        st.session_state["ext_changelog"] = []
+                        st.session_state["ext_score_before"] = {}
+                        st.session_state["ext_opt_type"] = ""
+                        st.success("已恢复为原始文章。")
+
+            if st.session_state.get("ext_original") and st.session_state["ext_original"] != ext_art:
+                with st.expander("📝 查看原文对比", expanded=False):
+                    st.markdown(st.session_state["ext_original"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1839,6 +1980,11 @@ if "last_result" in st.session_state:
     st.markdown('<div class="output-card-title">🛠️ 模块 D — SEO / GEO 工具箱</div>',
                 unsafe_allow_html=True)
 
+    kw_for_d = st.session_state.get("last_keywords", "")
+    faq_for_d = result.get("faq_pairs", [])
+    stats_d = reading_stats(article, kw_for_d)
+    geo_d = geo_score(article, faq_for_d)
+
     tab_schema, tab_links, tab_stats, tab_geo, tab_dual, tab_ai_detect = st.tabs(
         ["📋 Schema", "🔗 内部链接", "📊 SEO 评分",
          "🧠 GEO 评分", "⚡ 双优化", "🤖 AI 检测"]
@@ -1874,16 +2020,9 @@ if "last_result" in st.session_state:
                 st.markdown(f"- [{url}]({url})")
 
     with tab_stats:
-        kw_for_stats = st.session_state.get("last_keywords", "")
-        stats = reading_stats(article, kw_for_stats)
-
+        stats = stats_d
         score = stats["structure_score"]
-        if score >= 80:
-            score_color = "#00c853"
-        elif score >= 50:
-            score_color = "#fbbf24"
-        else:
-            score_color = "#f87171"
+        score_color = _score_color(score)
 
         m1, m2, m3, m4 = st.columns(4)
         with m1:
@@ -1937,7 +2076,7 @@ if "last_result" in st.session_state:
 
 【SEO 优化要求】
 - 确保有 1 个 H1（#）和至少 3 个 H2（##）
-- 自然增加关键词密度到 1-2%（关键词：{kw_for_stats}）
+- 自然增加关键词密度到 1-2%（关键词：{kw_for_d}）
 - 结尾必须有明确的 CTA（引导访问 mp.net 下载 MPChat 或申请 MP Card）
 - 文章总长度 800-1200 字
 - 每段不超过 150 字
@@ -1947,44 +2086,18 @@ if "last_result" in st.session_state:
 
 请直接输出优化后的完整文章（Markdown 格式），不要输出 JSON，不要解释修改内容。"""
 
-                with st.spinner("🤖 正在 SEO 优化中..."):
-                    try:
-                        opt_client = get_client(api_key_input, base_url_input)
-                        opt_response = opt_client.chat.completions.create(
-                            model=model_input.strip() if model_input else "gemini-2.5-flash",
-                            messages=[
-                                {"role": "system", "content": "你是 SEO 优化专家，请直接输出优化后的 Markdown 文章。"},
-                                {"role": "user", "content": optimize_prompt},
-                            ],
-                            temperature=0.6,
-                            max_tokens=8000,
-                        )
-                        optimized = opt_response.choices[0].message.content.strip()
-                        if optimized.startswith("```"):
-                            opt_lines = optimized.split("\n")
-                            opt_inner = "\n".join(opt_lines[1:])
-                            if "```" in opt_inner:
-                                optimized = opt_inner[:opt_inner.rfind("```")].strip()
-                            else:
-                                optimized = opt_inner.strip()
-
-                        st.session_state["last_result"]["article"] = optimized
-                        st.success("SEO 优化完成！文章已更新，切换其他 Tab 或滚动上方查看新内容。")
-                    except Exception as e:
-                        st.error(f"优化失败：{e}")
+                _optimize_article(
+                    optimize_prompt,
+                    "你是 SEO 优化专家，请直接输出优化后的 Markdown 文章。",
+                    "🤖 正在 SEO 优化中...",
+                    "SEO 优化完成！文章已更新，切换其他 Tab 或滚动上方查看新内容。",
+                )
 
     # ── Tab: GEO 评分 ────────────────────────────────────────────────────────
     with tab_geo:
-        faq_pairs_for_geo = result.get("faq_pairs", [])
-        geo_result = geo_score(article, faq_pairs_for_geo)
+        geo_result = geo_d
         g_score = geo_result["score"]
-
-        if g_score >= 80:
-            g_color = "#00c853"
-        elif g_score >= 50:
-            g_color = "#fbbf24"
-        else:
-            g_color = "#f87171"
+        g_color = _score_color(g_score)
 
         gc1, gc2 = st.columns([1, 3])
         with gc1:
@@ -2025,50 +2138,25 @@ if "last_result" in st.session_state:
             if st.button("🧠 一键 GEO 优化到 90+", use_container_width=True,
                          key="geo_optimize_btn"):
                 geo_opt_prompt = build_geo_optimize_prompt(
-                    article, geo_result,
-                    keywords=st.session_state.get("last_keywords", "")
+                    article, geo_result, keywords=kw_for_d
                 )
-                with st.spinner("🤖 正在 GEO 优化中..."):
-                    try:
-                        opt_client = get_client(api_key_input, base_url_input)
-                        opt_response = opt_client.chat.completions.create(
-                            model=model_input.strip() if model_input else "gemini-2.5-flash",
-                            messages=[
-                                {"role": "system", "content": "你是 GEO（Generative Engine Optimization）专家，专门优化内容以提升在 ChatGPT、Perplexity、Gemini 等 AI 搜索引擎中的可见性。请直接输出优化后的 Markdown 文章。"},
-                                {"role": "user", "content": geo_opt_prompt},
-                            ],
-                            temperature=0.6,
-                            max_tokens=8000,
-                        )
-                        optimized = opt_response.choices[0].message.content.strip()
-                        if optimized.startswith("```"):
-                            opt_lines = optimized.split("\n")
-                            opt_inner = "\n".join(opt_lines[1:])
-                            if "```" in opt_inner:
-                                optimized = opt_inner[:opt_inner.rfind("```")].strip()
-                            else:
-                                optimized = opt_inner.strip()
-
-                        st.session_state["last_result"]["article"] = optimized
-                        st.success("GEO 优化完成！文章已更新，切换其他 Tab 或滚动上方查看新内容。")
-                    except Exception as e:
-                        st.error(f"GEO 优化失败：{e}")
+                _optimize_article(
+                    geo_opt_prompt,
+                    "你是 GEO（Generative Engine Optimization）专家，专门优化内容以提升在 ChatGPT、Perplexity、Gemini 等 AI 搜索引擎中的可见性。请直接输出优化后的 Markdown 文章。",
+                    "🤖 正在 GEO 优化中...",
+                    "GEO 优化完成！文章已更新，切换其他 Tab 或滚动上方查看新内容。",
+                )
 
     # ── Tab: SEO + GEO 双优化 ──────────────────────────────────────────────
     with tab_dual:
         st.markdown("**SEO + GEO 联合优化**")
         st.caption("同时将 SEO 和 GEO 评分优化到 90+，避免优化一项时拉低另一项")
 
-        kw_dual = st.session_state.get("last_keywords", "")
-        faq_dual = result.get("faq_pairs", [])
-        stats_dual = reading_stats(article, kw_dual)
-        geo_dual = geo_score(article, faq_dual)
-
         dc1, dc2 = st.columns(2)
-        seo_s = stats_dual["structure_score"]
-        geo_s = geo_dual["score"]
-        seo_c = "#00c853" if seo_s >= 90 else ("#fbbf24" if seo_s >= 50 else "#f87171")
-        geo_c = "#00c853" if geo_s >= 90 else ("#fbbf24" if geo_s >= 50 else "#f87171")
+        seo_s = stats_d["structure_score"]
+        geo_s = geo_d["score"]
+        seo_c = _score_color(seo_s)
+        geo_c = _score_color(geo_s)
 
         with dc1:
             st.markdown(
@@ -2103,33 +2191,15 @@ if "last_result" in st.session_state:
             if st.button("⚡ 一键 SEO + GEO 双优化到 90+", use_container_width=True,
                          key="dual_optimize_btn"):
                 dual_prompt = build_dual_optimize_prompt(
-                    article, stats_dual, geo_dual, keywords=kw_dual,
+                    article, stats_d, geo_d, keywords=kw_for_d,
                 )
-                with st.spinner("🤖 正在联合优化 SEO + GEO（约 30 秒）..."):
-                    try:
-                        dual_client = get_client(api_key_input, base_url_input)
-                        dual_response = dual_client.chat.completions.create(
-                            model=model_input.strip() if model_input else "gemini-2.5-flash",
-                            messages=[
-                                {"role": "system", "content": "你是同时精通 SEO 和 GEO（Generative Engine Optimization）的内容优化专家。你必须同时满足 SEO 和 GEO 两套评分标准，不能为了一项牺牲另一项。请直接输出优化后的 Markdown 文章。"},
-                                {"role": "user", "content": dual_prompt},
-                            ],
-                            temperature=0.6,
-                            max_tokens=10000,
-                        )
-                        optimized = dual_response.choices[0].message.content.strip()
-                        if optimized.startswith("```"):
-                            d_lines = optimized.split("\n")
-                            d_inner = "\n".join(d_lines[1:])
-                            if "```" in d_inner:
-                                optimized = d_inner[:d_inner.rfind("```")].strip()
-                            else:
-                                optimized = d_inner.strip()
-
-                        st.session_state["last_result"]["article"] = optimized
-                        st.success(f"双优化完成！（优化前：SEO {seo_s} / GEO {geo_s}）文章已更新。")
-                    except Exception as e:
-                        st.error(f"双优化失败：{e}")
+                _optimize_article(
+                    dual_prompt,
+                    "你是同时精通 SEO 和 GEO（Generative Engine Optimization）的内容优化专家。你必须同时满足 SEO 和 GEO 两套评分标准，不能为了一项牺牲另一项。请直接输出优化后的 Markdown 文章。",
+                    "🤖 正在联合优化 SEO + GEO（约 30 秒）...",
+                    f"双优化完成！（优化前：SEO {seo_s} / GEO {geo_s}）文章已更新。",
+                    max_tokens=10000,
+                )
 
     # ── Tab: AI 检测 + 人性化 ────────────────────────────────────────────────
     with tab_ai_detect:
@@ -2176,7 +2246,7 @@ AI 痕迹：
             st.markdown(st.session_state["ai_detect_result"])
             st.divider()
 
-        kw_human = st.session_state.get("last_keywords", "MPChat, 加密支付")
+        kw_human = kw_for_d if kw_for_d else "MPChat, 加密支付"
 
         col_hum, col_tri = st.columns(2)
 
@@ -2211,69 +2281,31 @@ AI 痕迹：
 
 请直接输出改写后的完整文章（Markdown 格式），保留所有 H1/H2/FAQ/CTA 结构。"""
 
-            with st.spinner("✍️ 正在人性化改写中..."):
-                try:
-                    hum_client = get_client(api_key_input, base_url_input)
-                    hum_response = hum_client.chat.completions.create(
-                        model=model_input.strip() if model_input else "gemini-2.5-flash",
-                        messages=[
-                            {"role": "system", "content": "你是一位资深的人类内容编辑。改写时必须保留文章的 H1/H2 标题结构、FAQ 段落、CTA、数据引用和关键词分布，只改写行文风格使之更自然。"},
-                            {"role": "user", "content": humanize_prompt},
-                        ],
-                        temperature=0.8,
-                        max_tokens=8000,
-                    )
-                    humanized = hum_response.choices[0].message.content.strip()
-                    if humanized.startswith("```"):
-                        h_lines = humanized.split("\n")
-                        h_inner = "\n".join(h_lines[1:])
-                        if "```" in h_inner:
-                            humanized = h_inner[:h_inner.rfind("```")].strip()
-                        else:
-                            humanized = h_inner.strip()
-
-                    st.session_state["last_result"]["article"] = humanized
-                    st.session_state["ai_detect_result"] = ""
-                    st.success("人性化改写完成！文章已更新，切换其他 Tab 查看新评分。")
-                except Exception as e:
-                    st.error(f"人性化改写失败：{e}")
+            result_text = _optimize_article(
+                humanize_prompt,
+                "你是一位资深的人类内容编辑。改写时必须保留文章的 H1/H2 标题结构、FAQ 段落、CTA、数据引用和关键词分布，只改写行文风格使之更自然。",
+                "✍️ 正在人性化改写中...",
+                "人性化改写完成！文章已更新，切换其他 Tab 查看新评分。",
+                temperature=0.8,
+            )
+            if result_text:
+                st.session_state["ai_detect_result"] = ""
 
         if do_triple:
-            faq_tri = result.get("faq_pairs", [])
-            geo_tri = geo_score(article, faq_tri)
-            stats_tri = reading_stats(article, kw_human)
             triple_prompt = build_triple_optimize_prompt(
-                article, stats_tri, geo_tri, keywords=kw_human
+                article, stats_d, geo_d, keywords=kw_human
             )
-
-            with st.spinner("🚀 三合一优化中（SEO + GEO + 人性化，约 40 秒）..."):
-                try:
-                    tri_client = get_client(api_key_input, base_url_input)
-                    tri_response = tri_client.chat.completions.create(
-                        model=model_input.strip() if model_input else "gemini-2.5-flash",
-                        messages=[
-                            {"role": "system", "content": "你是同时精通 SEO、GEO 和人性化写作的内容专家。你的目标是输出一篇 SEO ≥ 90、GEO ≥ 90、AI 检测率 ≤ 30 的文章。"},
-                            {"role": "user", "content": triple_prompt},
-                        ],
-                        temperature=0.7,
-                        max_tokens=10000,
-                    )
-                    tripled = tri_response.choices[0].message.content.strip()
-                    if tripled.startswith("```"):
-                        t_lines = tripled.split("\n")
-                        t_inner = "\n".join(t_lines[1:])
-                        if "```" in t_inner:
-                            tripled = t_inner[:t_inner.rfind("```")].strip()
-                        else:
-                            tripled = t_inner.strip()
-
-                    seo_before = stats_tri.get("structure_score", 0)
-                    geo_before = geo_tri["score"]
-                    st.session_state["last_result"]["article"] = tripled
-                    st.session_state["ai_detect_result"] = ""
-                    st.success(f"三合一优化完成！（优化前：SEO {seo_before} / GEO {geo_before}）文章已更新。")
-                except Exception as e:
-                    st.error(f"三合一优化失败：{e}")
+            seo_before = stats_d["structure_score"]
+            geo_before = geo_d["score"]
+            result_text = _optimize_article(
+                triple_prompt,
+                "你是同时精通 SEO、GEO 和人性化写作的内容专家。你的目标是输出一篇 SEO ≥ 90、GEO ≥ 90、AI 检测率 ≤ 30 的文章。",
+                "🚀 三合一优化中（SEO + GEO + 人性化，约 40 秒）...",
+                f"三合一优化完成！（优化前：SEO {seo_before} / GEO {geo_before}）文章已更新。",
+                max_tokens=10000, temperature=0.7,
+            )
+            if result_text:
+                st.session_state["ai_detect_result"] = ""
 
     st.divider()
 
@@ -2285,8 +2317,6 @@ AI 痕迹：
         "🔗 Dev.to", "🔗 Hashnode", "📝 Medium", "💼 LinkedIn",
         "🐦 Twitter", "📖 知乎", "📱 微信公众号", "🔐 加密博客"
     ])
-
-    slug = result.get("slug_suggestion", "")
 
     with dist_tabs[0]:
         st.markdown("**Dev.to — API 直发**")
