@@ -639,7 +639,12 @@ with st.sidebar:
     )
     provider = PROVIDERS[provider_name]
 
-    env_key = os.getenv("OPENAI_API_KEY", "AIzaSyBW4rSs3QgTIjbRDZeZZm8LVbezxiXQyYc")
+    def _get_default_key():
+        if "GEMINI_API_KEY" in st.secrets:
+            return st.secrets["GEMINI_API_KEY"]
+        return os.getenv("OPENAI_API_KEY", "")
+
+    env_key = _get_default_key()
     api_key_input = st.text_input(
         "API Key", value=env_key, type="password",
         placeholder=provider["key_prefix"] or "输入 API Key",
