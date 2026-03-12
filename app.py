@@ -597,14 +597,15 @@ st.markdown("""
     --primary: #635BFF;
     --primary-hover: #7C75FF;
     --primary-glow: rgba(99, 91, 255, 0.25);
-    --bg-dark: #09090B;
-    --card-bg: rgba(18, 18, 21, 0.75);
+    --accent-cyan: #00D1FF;
+    --bg-dark: #020203;
+    --card-bg: rgba(13, 13, 17, 0.70);
     --border: rgba(255, 255, 255, 0.08);
-    --border-hover: rgba(99, 91, 255, 0.18);
-    --text-main: #FAFAFA;
+    --border-hover: rgba(99, 91, 255, 0.25);
+    --text-main: #F5F5F7;
     --text-body: #D4D4D8;
     --text-muted: #A1A1AA;
-    --text-dim: #71717A;
+    --text-dim: #86868B;
     --radius-sm: 8px;
     --radius-md: 14px;
     --radius-lg: 20px;
@@ -625,14 +626,16 @@ html, body, [class*="css"] {
 }
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
-header[data-testid="stHeader"] { background: transparent !important; backdrop-filter: none !important; }
+header[data-testid="stHeader"] { background: rgba(2,2,3,0.75) !important; backdrop-filter: blur(12px) !important; }
+.stDeployButton { display: none; }
 [data-testid="collapsedControl"] { visibility: visible !important; color: var(--text-muted) !important; }
 
 .stApp {
     background-color: var(--bg-dark);
     background-image:
-        radial-gradient(circle at 0% 0%, rgba(99,91,255,0.15) 0%, transparent 35%),
-        radial-gradient(circle at 100% 100%, rgba(0,150,255,0.10) 0%, transparent 35%);
+        radial-gradient(circle at 10% 10%, rgba(99,91,255,0.10) 0%, transparent 40%),
+        radial-gradient(circle at 90% 90%, rgba(0,209,255,0.06) 0%, transparent 40%);
+    background-attachment: fixed;
 }
 
 /* ─── Banner (Stripe gradient + glow orb) ─── */
@@ -664,9 +667,9 @@ header[data-testid="stHeader"] { background: transparent !important; backdrop-fi
 }
 .mp-banner p { color: var(--text-muted); font-size: 1rem; margin: 8px 0 0 0; font-weight: 400; letter-spacing: -0.01em; }
 .mp-badge {
-    background: rgba(99,91,255,0.15);
-    border: 1px solid rgba(99,91,255,0.30);
-    color: #8880FF;
+    background: linear-gradient(90deg, rgba(99,91,255,0.18), rgba(0,209,255,0.08));
+    border: 1px solid rgba(99,91,255,0.35);
+    color: #8F8AFF;
     border-radius: var(--radius-pill); padding: 6px 16px; font-size: 0.72rem;
     font-weight: 600; display: inline-block; margin-top: 14px;
     letter-spacing: 0.1em; text-transform: uppercase;
@@ -679,12 +682,14 @@ div[data-testid="stVerticalBlock"] > div[style*="border"] {
     border-radius: var(--radius-lg) !important;
     padding: 28px !important;
     box-shadow: 0 8px 32px rgba(0,0,0,0.35) !important;
-    backdrop-filter: blur(20px) !important;
-    transition: border-color 0.2s var(--ease);
+    backdrop-filter: blur(16px) !important;
+    transition: all 0.3s var(--ease);
     margin-bottom: 16px !important;
 }
 div[data-testid="stVerticalBlock"] > div[style*="border"]:hover {
     border-color: var(--border-hover) !important;
+    box-shadow: 0 12px 48px rgba(99,91,255,0.12) !important;
+    transform: translateY(-2px);
 }
 
 /* ─── Typography ─── */
@@ -695,18 +700,18 @@ div[data-testid="stVerticalBlock"] > div[style*="border"]:hover {
 /* ─── Buttons (Revolut micro-interaction) ─── */
 .stButton > button[kind="primary"],
 .stButton > button:first-child {
-    background: linear-gradient(180deg, var(--primary) 0%, #5046E5 100%);
+    background: linear-gradient(180deg, var(--primary) 0%, #4339F2 100%);
     color: #fff; font-weight: 600; border: none;
     border-radius: 12px; padding: 12px 24px;
     transition: all 0.2s var(--ease);
-    box-shadow: 0 4px 14px var(--primary-glow), inset 0 1px 0 rgba(255,255,255,0.12);
-    letter-spacing: 0.01em;
+    box-shadow: 0 0 0 1px rgba(99,91,255,0.5), 0 4px 14px rgba(0,0,0,0.4);
+    letter-spacing: -0.01em;
 }
 .stButton > button[kind="primary"]:hover,
 .stButton > button:first-child:hover {
     background: linear-gradient(180deg, var(--primary-hover) 0%, var(--primary) 100%);
     transform: translateY(-2px);
-    box-shadow: 0 6px 24px rgba(99,91,255,0.40), inset 0 1px 0 rgba(255,255,255,0.12);
+    box-shadow: 0 0 0 2px rgba(99,91,255,0.8), 0 8px 24px rgba(99,91,255,0.30);
 }
 .stButton > button[kind="primary"]:active,
 .stButton > button:first-child:active { transform: translateY(0); }
@@ -736,15 +741,15 @@ div[data-testid="stVerticalBlock"] > div[style*="border"]:hover {
 
 /* ─── Sidebar (Fintech Dark) ─── */
 [data-testid="stSidebar"] {
-    background-color: #0C0C0E !important;
+    background-color: #050507 !important;
     border-right: 1px solid var(--border) !important;
     min-width: 310px !important;
 }
 [data-testid="stSidebar"] [data-testid="stSidebarContent"] { padding-top: 1.5rem !important; }
 .sidebar-section {
-    font-size: 0.7rem; font-weight: 700; color: var(--text-dim);
-    text-transform: uppercase; letter-spacing: 0.12em;
-    margin: 20px 0 12px 0; padding: 0;
+    font-size: 0.75rem; font-weight: 700; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.15em;
+    margin: 2rem 0 1rem 0; padding-left: 4px;
 }
 .sidebar-logo { height: 28px; width: auto; margin-bottom: 4px; }
 .sidebar-footer {
@@ -760,20 +765,21 @@ div[data-testid="stVerticalBlock"] > div[style*="border"]:hover {
     border: 1px solid var(--border);
 }
 .stTabs [data-baseweb="tab"] {
-    background: transparent !important;
+    height: 40px;
+    background: rgba(255,255,255,0.03) !important;
     border: 1px solid transparent !important;
-    border-radius: var(--radius-pill) !important;
+    border-radius: 10px !important;
     padding: 8px 20px !important;
     color: var(--text-dim) !important;
     font-weight: 500; font-size: 0.85rem;
     transition: all 0.2s var(--ease) !important;
 }
-.stTabs [data-baseweb="tab"]:hover { color: var(--text-muted) !important; }
+.stTabs [data-baseweb="tab"]:hover { color: var(--text-muted) !important; background: rgba(255,255,255,0.05) !important; }
 .stTabs [aria-selected="true"] {
-    background: var(--primary) !important;
-    color: white !important;
-    border-color: var(--primary) !important;
-    box-shadow: 0 2px 8px var(--primary-glow);
+    background: rgba(99,91,255,0.12) !important;
+    color: #fff !important;
+    border-color: rgba(99,91,255,0.30) !important;
+    box-shadow: 0 2px 12px var(--primary-glow);
 }
 .stTabs [data-baseweb="tab-highlight"] { display: none; }
 
@@ -792,11 +798,11 @@ hr { border-color: var(--border) !important; margin: 24px 0 !important; }
 /* ─── Score Ring (Revolut Analytics glow) ─── */
 .score-ring {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 72px; height: 72px; border-radius: 50%;
-    font-size: 1.4rem; font-weight: 800;
-    background: var(--bg-dark);
+    width: 80px; height: 80px; border-radius: 50%;
+    font-size: 1.6rem; font-weight: 800;
+    background: rgba(0,0,0,0.25);
     border: 4px solid currentColor;
-    box-shadow: 0 0 20px rgba(99,91,255,0.15), inset 0 0 0 2px currentColor;
+    box-shadow: inset 0 0 15px rgba(255,255,255,0.04), 0 0 24px rgba(99,91,255,0.18);
 }
 
 /* ─── Output Card Titles ─── */
@@ -831,12 +837,14 @@ hr { border-color: var(--border) !important; margin: 24px 0 !important; }
 
 /* ─── SEO Meta Boxes ─── */
 .seo-title-box, .seo-desc-box {
-    background: rgba(0,0,0,0.2);
-    border: 1px solid var(--border);
-    border-radius: 12px; padding: 16px;
+    background: rgba(255,255,255,0.02);
+    border-left: 3px solid var(--primary);
+    border-top: none; border-right: none; border-bottom: none;
+    border-radius: 0 12px 12px 0; padding: 16px;
     font-family: 'SF Mono', 'Menlo', monospace;
-    font-size: 0.9rem; line-height: 1.6;
+    font-size: 0.92rem; line-height: 1.6;
     color: var(--text-body);
+    margin-bottom: 16px;
 }
 
 /* ─── Radio pills in sidebar ─── */
