@@ -383,6 +383,22 @@ def _strip_code_fences(text: str) -> str:
     return text
 
 
+def _validate_keywords(kw: str) -> str | None:
+    """Validate keyword input. Returns error message or None if valid."""
+    kw = kw.strip()
+    if not kw:
+        return "关键词不能为空，请输入至少一个关键词。"
+    if len(kw) < 2:
+        return "关键词至少需要 2 个字符。"
+    if len(kw) > 500:
+        return "关键词总长度不能超过 500 个字符。"
+    if re.search(r'[<>"\'`]', kw):
+        return "关键词包含非法字符（< > \" ' `），请移除后重试。"
+    if re.match(r'^[\s\d,，、]+$', kw):
+        return "关键词不能只包含数字或分隔符，请输入有意义的关键词。"
+    return None
+
+
 def _score_color(score: int) -> str:
     """Return color hex for score: green ≥80, yellow ≥50, red <50."""
     if score >= 80:
@@ -390,6 +406,110 @@ def _score_color(score: int) -> str:
     if score >= 50:
         return "#fbbf24"
     return "#f87171"
+
+
+def _score_grade(score: int) -> str:
+    if score >= 90:
+        return "优秀"
+    if score >= 80:
+        return "良好"
+    if score >= 60:
+        return "及格"
+    return "需改进"
+
+
+def _svg_score_ring(score: int, label: str = "", size: int = 84,
+                    stroke: int = 6) -> str:
+    """Return an SVG ring HTML snippet with animated arc fill."""
+    r = (size - stroke) / 2
+    circ = 2 * 3.14159265 * r
+    offset = circ - (score / 100) * circ
+    color = _score_color(score)
+    grade = _score_grade(score)
+    return (
+        f"<div class='svg-score-wrap'>"
+        f"<div class='svg-score-ring' style='width:{size}px;height:{size}px;'>"
+        f"<svg width='{size}' height='{size}'>"
+        f"<circle class='ring-bg' cx='{size/2}' cy='{size/2}' r='{r}' "
+        f"stroke-width='{stroke}'/>"
+        f"<circle class='ring-fg' cx='{size/2}' cy='{size/2}' r='{r}' "
+        f"stroke='{color}' stroke-width='{stroke}' "
+        f"stroke-dasharray='{circ}' "
+        f"style='--circ:{circ};--offset:{offset};stroke-dashoffset:{offset};'/>"
+        f"</svg>"
+        f"<div class='svg-score-label'>"
+        f"<span class='val' style='color:{color};'>{score}</span>"
+        f"<span class='sub'>{grade}</span>"
+        f"</div></div>"
+        f"{'<div class=\"svg-score-caption\">' + label + '</div>' if label else ''}"
+        f"</div>"
+    )
+
+
+def _score_bar(label: str, value: int, max_val: int = 20) -> str:
+    """Render a single score breakdown bar as HTML."""
+    pct = min(value / max_val * 100, 100) if max_val > 0 else 0
+    color = _score_color(int(pct))
+    return (
+        f"<div class='score-bar-wrap'>"
+        f"<div class='score-bar-header'>"
+        f"<span class='score-bar-label'>{label}</span>"
+        f"<span class='score-bar-val' style='color:{color};'>{value}/{max_val}</span>"
+        f"</div>"
+        f"<div class='score-bar-track'>"
+        f"<div class='score-bar-fill' style='width:{pct}%;background:{color};'></div>"
+        f"</div></div>"
+    )
+
+
+def _render_seo_breakdown(stats: dict) -> str:
+    """Build SEO sub-score breakdown HTML from reading_stats output."""
+    h1_s = 20 if stats.get("h1_count", 0) >= 1 else 0
+    h2_c = stats.get("h2_count", 0)
+    h2_s = 20 if h2_c >= 2 else (10 if h2_c >= 1 else 0)
+    cta_s = 20 if stats.get("has_cta") else 0
+    wc = stats.get("word_count", 0)
+    len_s = 20 if 600 <= wc <= 1500 else (10 if wc > 300 else 0)
+    kd = stats.get("keyword_density", {})
+    if not kd:
+        kw_s = 20
+    else:
+        avg_d = sum(v["density_pct"] for v in kd.values()) / len(kd)
+        kw_s = 20 if 0.5 <= avg_d <= 3.0 else (10 if avg_d > 0 else 0)
+    return (
+        _score_bar("H1 标题", h1_s, 20) +
+        _score_bar("H2 结构", h2_s, 20) +
+        _score_bar("CTA 行动号召", cta_s, 20) +
+        _score_bar("内容长度", len_s, 20) +
+        _score_bar("关键词密度", kw_s, 20)
+    )
+
+
+def _render_geo_breakdown(details: dict) -> str:
+    """Build GEO sub-score breakdown HTML from geo_score details."""
+    fp_len = details.get("answer_first_len", 0)
+    af_s = 10 if fp_len <= 200 else (6 if fp_len <= 350 else 0)
+    qr = details.get("question_h2_ratio", 0)
+    qr_s = 10 if qr >= 30 else (6 if qr >= 15 else 0)
+    cc = details.get("citation_count", 0)
+    cc_s = 15 if cc >= 5 else (10 if cc >= 3 else min(cc * 2, 15))
+    lp = details.get("long_paragraphs", 0)
+    lp_s = 10 if lp == 0 else (6 if lp <= 2 else 0)
+    ec = details.get("entity_mentions", 0)
+    ec_s = 10 if ec >= 3 else (6 if ec >= 2 else 0)
+    fq = details.get("faq_count", 0)
+    fq_s = 20 if fq >= 5 else (12 if fq >= 3 else (6 if fq >= 1 else 0))
+    ac = details.get("authority_refs", 0)
+    ac_s = 15 if ac >= 3 else (8 if ac >= 1 else 0)
+    return (
+        _score_bar("开篇直答", af_s, 10) +
+        _score_bar("问题式标题", qr_s, 10) +
+        _score_bar("数据引用", cc_s, 15) +
+        _score_bar("段落简洁度", lp_s, 10) +
+        _score_bar("实体一致性", ec_s, 10) +
+        _score_bar("FAQ 覆盖", fq_s, 20) +
+        _score_bar("权威来源", ac_s, 15)
+    )
 
 
 def _optimize_article(prompt: str, system_msg: str, spinner_text: str,
@@ -849,18 +969,24 @@ hr { border-color: var(--border) !important; margin: 24px 0 !important; }
 .kw-med  { background: rgba(251,191,36,0.10); color: #FBD24E; border: 1px solid rgba(251,191,36,0.18); }
 .kw-high { background: rgba(248,113,113,0.10); color: #F87171; border: 1px solid rgba(248,113,113,0.18); }
 
-/* ─── Score Ring (Apple Watch complication style) ─── */
-.score-ring {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 76px; height: 76px; border-radius: 50%;
-    font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em;
-    background: rgba(0,0,0,0.30);
-    border: 3.5px solid currentColor;
-    box-shadow:
-        inset 0 0 12px rgba(255,255,255,0.03),
-        0 0 20px rgba(99,91,255,0.14);
-    transition: box-shadow 0.3s var(--ease);
+/* ─── SVG Score Ring (Apple Watch style) ─── */
+.svg-score-wrap { text-align: center; }
+.svg-score-ring { position: relative; display: inline-block; }
+.svg-score-ring svg { transform: rotate(-90deg); filter: drop-shadow(0 0 8px var(--primary-glow)); }
+.svg-score-ring .ring-bg { fill: none; stroke: rgba(255,255,255,0.06); }
+.svg-score-ring .ring-fg {
+    fill: none; stroke-linecap: round;
+    animation: ringFill 1s var(--ease) forwards;
 }
+@keyframes ringFill { from { stroke-dashoffset: var(--circ); } to { stroke-dashoffset: var(--offset); } }
+.svg-score-label {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    transform: rotate(0deg);
+}
+.svg-score-label .val { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+.svg-score-label .sub { font-size: 0.6rem; color: var(--text-dim); margin-top: 2px; }
+.svg-score-caption { font-size: 0.72rem; color: var(--text-dim); margin-top: 6px; }
 
 /* ─── Output Card Titles ─── */
 .output-card-title {
@@ -960,6 +1086,23 @@ hr { border-color: var(--border) !important; margin: 24px 0 !important; }
 
 /* ─── Progress / Status containers ─── */
 .stStatus { border-radius: var(--radius-md) !important; }
+
+/* ─── Score breakdown bars ─── */
+.score-bar-wrap { margin-bottom: 10px; }
+.score-bar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.score-bar-label { font-size: 0.8rem; color: var(--text-muted); }
+.score-bar-val { font-size: 0.78rem; font-weight: 700; }
+.score-bar-track {
+    height: 6px; border-radius: 3px;
+    background: rgba(255,255,255,0.06);
+    overflow: hidden;
+}
+.score-bar-fill {
+    height: 100%; border-radius: 3px;
+    animation: barGrow 0.8s var(--ease) forwards;
+    transform-origin: left;
+}
+@keyframes barGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1227,6 +1370,8 @@ with st.expander("📦 批量生成模式", expanded=False):
     if batch_btn and batch_selected:
         if not api_key_input.strip():
             st.error("❌ 请在左侧填写 API Key。")
+        elif _validate_keywords(keywords):
+            st.warning(f"⚠️ {_validate_keywords(keywords)}")
         else:
             batch_results: list[dict] = []
             with st.status(
@@ -1526,13 +1671,10 @@ with st.expander("📝 外部文章优化检测（粘贴已有文章进行 SEO /
             with em3:
                 st.metric("H2 段落数", f"{ext_stats['h2_count']}")
             with em4:
-                sc = _score_color(ext_seo_score)
-                st.markdown(
-                    f"<div style='text-align:center;'>"
-                    f"<div class='score-ring' style='border:3px solid {sc};color:{sc};'>"
-                    f"{ext_seo_score}</div>"
-                    f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>SEO 评分</div>"
-                    f"</div>", unsafe_allow_html=True)
+                st.markdown(_svg_score_ring(ext_seo_score, "SEO 评分"), unsafe_allow_html=True)
+
+            st.markdown("**评分明细：**")
+            st.markdown(_render_seo_breakdown(ext_stats), unsafe_allow_html=True)
 
             st.markdown(f"**CTA 检测：** {'✅ 包含 CTA' if ext_stats['has_cta'] else '❌ 缺少 CTA'}")
             if ext_stats["keyword_density"]:
@@ -1585,29 +1727,13 @@ with st.expander("📝 外部文章优化检测（粘贴已有文章进行 SEO /
         with ext_tab_geo:
             ext_geo_result = ext_geo_data
             ext_g_score = ext_geo_result["score"]
-            ext_g_color = _score_color(ext_g_score)
 
             egc1, egc2 = st.columns([1, 3])
             with egc1:
-                st.markdown(
-                    f"<div style='text-align:center;'>"
-                    f"<div class='score-ring' style='border:3px solid {ext_g_color};color:{ext_g_color};font-size:2rem;'>"
-                    f"{ext_g_score}</div>"
-                    f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>GEO 评分</div>"
-                    f"</div>", unsafe_allow_html=True)
+                st.markdown(_svg_score_ring(ext_g_score, "GEO 评分"), unsafe_allow_html=True)
             with egc2:
-                ed = ext_geo_result["details"]
-                st.markdown(f"""
-| 指标 | 数值 |
-|---|---|
-| 开头段落长度 | {ed['answer_first_len']} 字 |
-| 问句 H2 占比 | {ed['question_h2_ratio']}% |
-| 数据引用数 | {ed['citation_count']} 处 |
-| 长段落数 | {ed['long_paragraphs']} 个 |
-| 实体提及数 | {ed['entity_mentions']} 种 |
-| FAQ 数量 | {ed['faq_count']} 对 |
-| 权威引用 | {ed['authority_refs']} 处 |
-""")
+                st.markdown("**评分明细：**")
+                st.markdown(_render_geo_breakdown(ext_geo_result["details"]), unsafe_allow_html=True)
             if ext_geo_result["issues"]:
                 st.markdown("**需改进的问题：**")
                 for iss in ext_geo_result["issues"]:
@@ -1639,21 +1765,9 @@ with st.expander("📝 外部文章优化检测（粘贴已有文章进行 SEO /
 
             edc1, edc2 = st.columns(2)
             with edc1:
-                sc = _score_color(ext_seo_sd)
-                st.markdown(
-                    f"<div style='text-align:center;'>"
-                    f"<div class='score-ring' style='border:3px solid {sc};color:{sc};font-size:1.8rem;'>"
-                    f"{ext_seo_sd}</div>"
-                    f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>SEO 评分</div>"
-                    f"</div>", unsafe_allow_html=True)
+                st.markdown(_svg_score_ring(ext_seo_sd, "SEO 评分", size=72, stroke=5), unsafe_allow_html=True)
             with edc2:
-                gc = _score_color(ext_geo_sd)
-                st.markdown(
-                    f"<div style='text-align:center;'>"
-                    f"<div class='score-ring' style='border:3px solid {gc};color:{gc};font-size:1.8rem;'>"
-                    f"{ext_geo_sd}</div>"
-                    f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>GEO 评分</div>"
-                    f"</div>", unsafe_allow_html=True)
+                st.markdown(_svg_score_ring(ext_geo_sd, "GEO 评分", size=72, stroke=5), unsafe_allow_html=True)
 
             if ext_seo_sd >= 90 and ext_geo_sd >= 90:
                 st.success("SEO 和 GEO 评分均已达到 90+，无需优化！")
@@ -1841,12 +1955,20 @@ if generate_btn:
     if not selected_sp_ids:
         st.warning("⚠️ 请至少选择一个主打卖点。")
         st.stop()
+    kw_err = _validate_keywords(keywords)
+    if kw_err:
+        st.warning(f"⚠️ {kw_err}")
+        st.stop()
 
     with st.status("🚀 正在生成高质量软文...", expanded=True) as gen_status:
+        _stages_total = 2 + int(bool(use_web)) + int(bool(use_serp and keywords.strip())) + int(bool(use_images))
+        _stage_i = 0
+
         web_content = ""
         web_status = []
         if use_web:
-            st.write("🌐 正在并行抓取全网资料（10 个来源）...")
+            _stage_i += 1
+            st.write(f"**[{_stage_i}/{_stages_total}]** 🌐 正在并行抓取全网资料...")
             web_content, web_status = fetch_web_knowledge()
             ok_count = sum(1 for s in web_status if s["ok"])
             st.write(
@@ -1856,7 +1978,8 @@ if generate_btn:
 
         serp_context = ""
         if use_serp and keywords.strip():
-            st.write("🔍 正在分析 Google Top 10 竞品...")
+            _stage_i += 1
+            st.write(f"**[{_stage_i}/{_stages_total}]** 🔍 正在分析搜索引擎竞品...")
             primary_kw = keywords.strip().split(",")[0].strip()
             try:
                 serp_data = analyze_serp(primary_kw)
@@ -1870,7 +1993,8 @@ if generate_btn:
         if serp_context:
             combined_web = web_content + "\n\n" + serp_context if web_content else serp_context
 
-        st.write("🤖 AI 正在撰写文章（约 15-30 秒）...")
+        _stage_i += 1
+        st.write(f"**[{_stage_i}/{_stages_total}]** 🤖 AI 正在构建提示词并生成文章...")
         try:
             client = get_client(api_key_input, base_url_input)
             result = generate_article(
@@ -1893,6 +2017,7 @@ if generate_btn:
             st.session_state["last_scenario"] = selected_scenario
             st.session_state["last_geo_mode"] = geo_mode
             st.write("✅ 文章生成完成")
+            _stage_i += 1
 
         except json.JSONDecodeError:
             st.error("❌ AI 返回格式异常，无法解析 JSON。请重试。")
@@ -1910,7 +2035,7 @@ if generate_btn:
             st.stop()
 
         if use_images:
-            st.write("🖼️ 正在获取配图（Pixabay → Pexels → Placewise）...")
+            st.write(f"**[{_stage_i}/{_stages_total}]** 🖼️ 正在获取配图...")
             scenario_terms = st.session_state["last_scenario"].get("pixabay_terms", [])
             ai_terms = result.get("image_search_terms", [])
             art_title = result.get("seo_title", "")
@@ -2193,7 +2318,6 @@ if "last_result" in st.session_state:
     with tab_stats:
         stats = stats_d
         score = stats["structure_score"]
-        score_color = _score_color(score)
 
         m1, m2, m3, m4 = st.columns(4)
         with m1:
@@ -2203,14 +2327,10 @@ if "last_result" in st.session_state:
         with m3:
             st.metric("H2 段落数", f"{stats['h2_count']}")
         with m4:
-            st.markdown(
-                f"<div style='text-align:center;'>"
-                f"<div class='score-ring' style='border:3px solid {score_color};color:{score_color};'>"
-                f"{score}</div>"
-                f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>SEO 评分</div>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
+            st.markdown(_svg_score_ring(score, "SEO 评分"), unsafe_allow_html=True)
+
+        st.markdown("**评分明细：**")
+        st.markdown(_render_seo_breakdown(stats), unsafe_allow_html=True)
 
         st.markdown(f"**CTA 检测：** {'✅ 包含 CTA' if stats['has_cta'] else '❌ 缺少 CTA'}")
 
@@ -2268,31 +2388,14 @@ if "last_result" in st.session_state:
     with tab_geo:
         geo_result = geo_d
         g_score = geo_result["score"]
-        g_color = _score_color(g_score)
 
         gc1, gc2 = st.columns([1, 3])
         with gc1:
-            st.markdown(
-                f"<div style='text-align:center;'>"
-                f"<div class='score-ring' style='border:3px solid {g_color};color:{g_color};font-size:2rem;'>"
-                f"{g_score}</div>"
-                f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>GEO 评分</div>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
+            st.markdown(_svg_score_ring(g_score, "GEO 评分"), unsafe_allow_html=True)
         with gc2:
             details = geo_result["details"]
-            st.markdown(f"""
-| 指标 | 数值 |
-|---|---|
-| 开头段落长度 | {details['answer_first_len']} 字 |
-| 问句 H2 占比 | {details['question_h2_ratio']}% |
-| 数据引用数 | {details['citation_count']} 处 |
-| 长段落数 | {details['long_paragraphs']} 个 |
-| 实体提及数 | {details['entity_mentions']} 种 |
-| FAQ 数量 | {details['faq_count']} 对 |
-| 权威引用 | {details['authority_refs']} 处 |
-""")
+            st.markdown("**评分明细：**")
+            st.markdown(_render_geo_breakdown(details), unsafe_allow_html=True)
 
         if geo_result["issues"]:
             st.markdown("**需改进的问题：**")
@@ -2326,27 +2429,10 @@ if "last_result" in st.session_state:
         dc1, dc2 = st.columns(2)
         seo_s = stats_d["structure_score"]
         geo_s = geo_d["score"]
-        seo_c = _score_color(seo_s)
-        geo_c = _score_color(geo_s)
-
         with dc1:
-            st.markdown(
-                f"<div style='text-align:center;'>"
-                f"<div class='score-ring' style='border:3px solid {seo_c};color:{seo_c};font-size:1.8rem;'>"
-                f"{seo_s}</div>"
-                f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>SEO 评分</div>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
+            st.markdown(_svg_score_ring(seo_s, "SEO 评分", size=72, stroke=5), unsafe_allow_html=True)
         with dc2:
-            st.markdown(
-                f"<div style='text-align:center;'>"
-                f"<div class='score-ring' style='border:3px solid {geo_c};color:{geo_c};font-size:1.8rem;'>"
-                f"{geo_s}</div>"
-                f"<div style='font-size:0.75rem;color:#6b7280;margin-top:4px;'>GEO 评分</div>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
+            st.markdown(_svg_score_ring(geo_s, "GEO 评分", size=72, stroke=5), unsafe_allow_html=True)
 
         both_pass = seo_s >= 90 and geo_s >= 90
         if both_pass:
