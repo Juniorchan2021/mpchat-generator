@@ -1,8 +1,8 @@
 # MPChat 智能软文生成器 — 产品设计说明文档
 
-**版本：v4.1**
-**当前版本：v4.1 (已上线)**
-**最后更新：2026-03-11**
+**版本：v4.1 → v5（迁移中）**
+**当前版本：v4.1 (已上线) · v5 (文档阶段)**
+**最后更新：2026-03-15**
 **开发工具：全部代码（后端逻辑 + Streamlit UI + 工具模块）由 Claude Opus 编写和维护**
 
 ---
@@ -278,20 +278,74 @@ API 直发：Dev.to / Hashnode
 
 ## 6. 文件结构
 
+### 6.1 v4.x（Streamlit 单体，当前线上版本）
+
 ```
 MPChat-软文机器人/
-├── app.py              # 主应用
+├── app.py              # Streamlit 主应用（UI + 业务逻辑）
 ├── scenarios.py         # 场景/卖点/文风/关键词/语言数据
-├── image_client.py      # 多图库聚合（Placewise + Pixabay）
-├── seo_tools.py         # SEO 工具
-├── geo_tools.py         # GEO 评分 + Schema + Prompt 增强
+├── image_client.py      # 多图库聚合（Pixabay + Pexels + Placewise）
+├── seo_tools.py         # SEO 工具（评分、Schema、Slug、内链）
+├── geo_tools.py         # GEO 评分 + Schema + Prompt 构建
 ├── publishers.py        # 多平台发布格式化 + API 集成
-├── serp_analyzer.py     # SERP 分析器
+├── serp_analyzer.py     # SERP 竞品分析器
 ├── knowledge.txt        # MPChat 产品知识库
 ├── requirements.txt     # Python 依赖
 ├── packages.txt         # 系统级依赖
 ├── .env.example         # 环境变量示例
-├── PRD.md               # 本产品设计文档
+├── PRD.md               # 产品需求文档
+├── DESIGN_SYSTEM.md     # 设计规范文档（Apple HIG）
+├── MIGRATION_PLAN.md    # v5 迁移方案
+├── ENGINEERING_GUIDE.md # 工程规范文档
+└── .gitignore
+```
+
+### 6.2 v5（前后端分离，迁移目标）
+
+```
+MPChat-软文机器人/
+├── api/                        # Python 后端（FastAPI）
+│   ├── main.py                 # FastAPI 入口 + CORS
+│   ├── routers/                # 按模块拆分的子路由
+│   │   ├── config.py           # /api/v1/config/*（服务商、场景）
+│   │   ├── generate.py         # /api/v1/generate（单篇 + 批量）
+│   │   ├── analyze.py          # /api/v1/analyze/*（SEO、GEO）
+│   │   ├── optimize.py         # /api/v1/optimize（一键优化）
+│   │   ├── external.py         # /api/v1/external/*（外部文章）
+│   │   ├── publish.py          # /api/v1/publish/*（多平台分发）
+│   │   └── tools.py            # /api/v1/schema, /api/v1/slug, /api/v1/links
+│   └── models/                 # Pydantic 请求/响应模型
+│       ├── requests.py
+│       └── responses.py
+├── frontend/                   # Next.js 前端
+│   ├── app/                    # App Router 页面
+│   │   ├── page.tsx            # / — 创作工作台
+│   │   ├── external/page.tsx   # /external — 外部文章优化
+│   │   └── history/page.tsx    # /history — 生成历史
+│   ├── components/
+│   │   ├── ui/                 # 通用 UI 组件（Button、Card、Tab 等）
+│   │   └── features/           # 业务组件（ConfigBar、ScoreRing 等）
+│   ├── lib/
+│   │   └── api.ts              # 后端 API 调用封装
+│   ├── styles/
+│   │   └── globals.css         # Tailwind + Apple HIG CSS 变量
+│   ├── tailwind.config.ts
+│   └── package.json
+├── core/                       # 共享 Python 模块（包）
+│   ├── __init__.py
+│   ├── scenarios.py            # 场景/卖点/文风/关键词/语言
+│   ├── image_client.py         # 多图库聚合
+│   ├── seo_tools.py            # SEO 工具
+│   ├── geo_tools.py            # GEO 工具
+│   ├── publishers.py           # 多平台分发
+│   ├── serp_analyzer.py        # SERP 分析
+│   └── knowledge.txt           # 产品知识库
+├── tests/                      # 测试
+├── requirements.txt            # 后端 Python 依赖
+├── PRD.md                      # 产品需求文档
+├── DESIGN_SYSTEM.md            # 设计规范（Apple HIG）
+├── MIGRATION_PLAN.md           # 迁移方案
+├── ENGINEERING_GUIDE.md        # 工程规范
 └── .gitignore
 ```
 
@@ -370,6 +424,8 @@ MPChat-软文机器人/
 ---
 
 ## 10. Stripe × Apple UI/UX 重构 (v4.1 已实施)
+
+> **注意：本章描述的是 v4.1 Streamlit 版本的 UI 实现。v5 前后端分离版本将采用全新的 Apple HIG 设计系统，详见 [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)。本章保留作为历史参考。**
 
 v4.1 对整个 UI 进行了彻底重构，设计灵感来自 Stripe Dashboard（交互 & 配色）+ Apple（字体 & 排版），使用 MP.NET 官方品牌元素。
 
@@ -570,3 +626,113 @@ Module F 使用独立的 session state key，避免与生成流程冲突：
 ### 12.6 影响文件
 
 - `app.py`：Module F section（~400 行），含 helper 函数 `_parse_opt_result()`、`_render_changelog()`、`_render_score_comparison()`、`_ext_run_optimize()`
+
+---
+
+## 13. v5 架构升级 — 前后端分离
+
+### 13.1 升级背景
+
+v4.x 基于 Streamlit 构建，优势在于快速原型、零前端代码即可上线，但随着功能不断迭代（37+ 场景、多模块输出、多平台分发），Streamlit 的局限性日益明显：
+
+| 痛点 | 说明 |
+|------|------|
+| 自定义 UI 受限 | 无法实现精细动画、拖拽交互、响应式多栏布局；CSS 注入受 Shadow DOM 限制 |
+| 首屏加载慢 | Python 服务端渲染，每次交互全量 rerun，连接不稳时出现白屏/断连 |
+| 组件生态有限 | 缺少成熟的富文本编辑器、Markdown 实时预览、评分可视化等高阶组件 |
+| SEO 不友好 | Streamlit 生成的 SPA 无法被搜索引擎索引（如有对外展示需求） |
+| 部署绑定 | 目前仅能部署在 Streamlit Cloud，不支持 CDN 加速 |
+
+### 13.2 目标架构
+
+```
+用户浏览器
+   │
+   ▼
+┌──────────────────┐         ┌──────────────────┐
+│  Next.js 前端     │  HTTPS  │  FastAPI 后端      │
+│  Cloudflare Pages │ ◄─────► │  Railway / Render │
+│  (SSG + CSR)     │  JSON   │  (Python 3.11+)   │
+└──────────────────┘         └──────────────────┘
+                                     │
+                              ┌──────┴──────┐
+                              ▼             ▼
+                         LLM APIs     图库 APIs
+                     (OpenAI/Gemini)  (Pixabay/Pexels)
+```
+
+- **前端**：Next.js 14+ App Router，部署于 Cloudflare Pages（免费额度：无限带宽，500 次/月构建）
+- **后端**：FastAPI，部署于 Railway / Render（免费额度足够开发和轻度使用）
+- **通信**：前端通过 `fetch` / `SWR` 调用后端 REST API，JSON 格式
+
+### 13.3 用户体验变化
+
+| 维度 | v4.x (Streamlit) | v5 (Next.js + FastAPI) |
+|------|-------------------|------------------------|
+| 首屏加载 | 3-5s（Python SSR） | <1s（静态 HTML + CDN） |
+| 交互流畅度 | 每次操作全量 rerun | 局部更新，无闪烁 |
+| 动画与过渡 | CSS hack，效果有限 | 原生 CSS Transitions / Framer Motion |
+| 响应式布局 | 受限于 `st.columns` | 完整 CSS Grid / Flexbox |
+| 富文本预览 | `st.markdown` 渲染 | 实时 Markdown 编辑器 + 分屏预览 |
+| 拖拽排序 | 不支持 | 可实现批量文章拖拽排序 |
+| 离线体验 | 断连即不可用 | PWA 缓存，离线可浏览历史 |
+| UI 美观度 | 受限于 Streamlit 框架样式 | 完全自定义 Apple HIG 设计系统 |
+
+### 13.4 功能完整保留
+
+**所有 v4.x 功能在 v5 中 100% 保留，无功能裁剪：**
+
+- 37+ 场景生成（16 种语言 × 多场景分类 × 多文风）
+- SEO 工具链（评分、Schema、Slug、内链建议）
+- GEO 工具链（评分 + 6 项指标 + Prompt 增强）
+- AI 检测 + 人性化改写 + 三合一优化
+- 双优化（SEO + GEO 联合优化）+ 一键优化到 90+
+- 多图库聚合配图（Pixabay + Pexels + Placewise）
+- SERP 竞品分析
+- 多平台分发（WordPress、Medium、Ghost、LinkedIn 等）
+- 外部文章优化检测（Module F）
+- 批量生成（多场景并发）
+- 完整的评分对比 + 修改说明 + 撤销恢复
+
+### 13.5 v5 新增能力
+
+得益于前端框架的灵活性，v5 可实现以下 Streamlit 无法做到的功能：
+
+| 新能力 | 说明 |
+|--------|------|
+| Apple HIG 设计系统 | 毛玻璃材质、精细圆角、SF Pro 排版、弹性动效 |
+| 实时 Markdown 编辑器 | 生成结果可直接在线编辑，所见即所得 |
+| 评分环动画 | SVG 圆环 + 数字计数动画，视觉反馈更直观 |
+| 拖拽排序 | 批量文章可拖拽调整顺序 |
+| 键盘快捷键 | ⌘+Enter 生成、⌘+S 下载等 |
+| 深色/浅色主题切换 | 系统级别主题跟随 + 手动切换 |
+| PWA 支持 | 可安装到桌面，离线浏览历史记录 |
+| 更好的错误处理 | 前端 Toast 通知 + 请求重试 + 断网提示 |
+
+### 13.6 部署变化
+
+| 项目 | v4.x | v5 |
+|------|------|-----|
+| 前端部署 | Streamlit Cloud（免费） | Cloudflare Pages（免费，无限带宽） |
+| 后端部署 | 同 Streamlit Cloud | Railway / Render（免费额度） |
+| 域名 | Streamlit 提供子域名 | 可绑定自定义域名 |
+| CDN | 无 | Cloudflare 全球 CDN |
+| CI/CD | Git push 自动部署 | Git push 自动构建部署（前后端独立） |
+| 环境变量 | Streamlit Secrets | 各平台 Dashboard 配置 |
+
+### 13.7 迁移策略
+
+采用**渐进式迁移**，不中断线上服务：
+
+1. **Phase 0** — 完善文档体系（PRD、设计规范、迁移方案、工程规范）← **当前阶段**
+2. **Phase 1** — 搭建 FastAPI 后端骨架，将 `app.py` 业务逻辑提取为 API 端点
+3. **Phase 2** — 搭建 Next.js 前端骨架，实现创作工作台页面
+4. **Phase 3** — 实现 SEO/GEO 分析、外部文章优化、历史记录等剩余页面
+5. **Phase 4** — 部署、联调、回归测试
+6. **Phase 5** — 切换域名，下线 Streamlit 版本
+
+### 13.8 关联文档
+
+- `DESIGN_SYSTEM.md` — Apple HIG 风格的完整视觉规范
+- `MIGRATION_PLAN.md` — 技术迁移详细方案（API 端点、前端路由、部署配置）
+- `ENGINEERING_GUIDE.md` — 工程规范（目录结构、命名约定、Git 策略、本地开发）
