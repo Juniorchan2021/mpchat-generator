@@ -80,6 +80,10 @@ export function ExternalClient() {
     return () => clearTimeout(t);
   }, [copyMsg]);
 
+  useEffect(() => {
+    if (aiCfg.provider && aiCfg.api_key) saveAiConfig(aiCfg);
+  }, [aiCfg.provider, aiCfg.model, aiCfg.api_key, aiCfg.base_url]);
+
   const configLabel = useMemo(() => {
     const providerNames: Record<string, string> = {
       gemini: "Google Gemini", openai: "OpenAI", anthropic: "Anthropic", deepseek: "DeepSeek",
@@ -103,6 +107,7 @@ export function ExternalClient() {
   }
 
   async function handleOptimize(mode: "seo" | "geo" | "dual" | "triple" | "humanize") {
+    const warmupTimer = setTimeout(() => setShowWarmup(true), 8000);
     try {
       setLoading(true);
       setError("");
@@ -127,7 +132,7 @@ export function ExternalClient() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "优化失败");
     } finally {
-      setLoading(false);
+      clearTimeout(warmupTimer); setShowWarmup(false); setLoading(false);
     }
   }
 
@@ -142,7 +147,7 @@ export function ExternalClient() {
 
   function parseAiDetectResult(raw: unknown): AiDetectResult {
     if (raw == null) return { score: 0, traces: [], high_risk_paragraphs: [], summary: "" };
-    if (raw && typeof raw === "object" && "score" in raw) return raw as AiDetectResult;
+    if (raw && typeof raw === "object" && "score" in raw) { const result = raw as AiDetectResult; if (result.score > 1) result.score = result.score / 100; return result; }
     const text = typeof raw === "string" ? raw : JSON.stringify(raw);
     let score = 0;
     const scoreMatch = text.match(/(?:AI\s*评分|score)[：:]\s*(\d+)/i);
@@ -154,6 +159,7 @@ export function ExternalClient() {
   }
 
   async function handleDetectAi() {
+    const warmupTimer = setTimeout(() => setShowWarmup(true), 8000);
     try {
       setLoading(true);
       setError("");
@@ -168,7 +174,7 @@ export function ExternalClient() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "检测失败");
     } finally {
-      setLoading(false);
+      clearTimeout(warmupTimer); setShowWarmup(false); setLoading(false);
     }
   }
 
@@ -256,12 +262,12 @@ export function ExternalClient() {
           <button className="primary-button" onClick={handleAnalyze} disabled={loading || !article.trim()}>
             {loading ? t("msg.analyzing") : t("btn.analyze")}
           </button>
-          <button className="secondary-button" onClick={() => handleOptimize("seo")} disabled={loading || !aiCfg.api_key.trim()}>{t("btn.optimizeSeo")}</button>
-          <button className="secondary-button" onClick={() => handleOptimize("geo")} disabled={loading || !aiCfg.api_key.trim()}>{t("btn.optimizeGeo")}</button>
-          <button className="secondary-button" onClick={() => handleOptimize("dual")} disabled={loading || !aiCfg.api_key.trim()}>{t("btn.optimizeDual")}</button>
-          <button className="primary-button" onClick={() => handleOptimize("triple")} disabled={loading || !aiCfg.api_key.trim()}>{t("btn.optimizeTriple")}</button>
-          <button className="secondary-button" onClick={() => handleOptimize("humanize")} disabled={loading || !aiCfg.api_key.trim()}>{t("btn.humanize")}</button>
-          <button className="secondary-button" onClick={handleDetectAi} disabled={loading || !aiCfg.api_key.trim()}>{t("btn.detectAi")}</button>
+          <button className="secondary-button" onClick={() => handleOptimize("seo")} disabled={loading || !aiCfg.api_key.trim() || !article.trim()}>{t("btn.optimizeSeo")}</button>
+          <button className="secondary-button" onClick={() => handleOptimize("geo")} disabled={loading || !aiCfg.api_key.trim() || !article.trim()}>{t("btn.optimizeGeo")}</button>
+          <button className="secondary-button" onClick={() => handleOptimize("dual")} disabled={loading || !aiCfg.api_key.trim() || !article.trim()}>{t("btn.optimizeDual")}</button>
+          <button className="primary-button" onClick={() => handleOptimize("triple")} disabled={loading || !aiCfg.api_key.trim() || !article.trim()}>{t("btn.optimizeTriple")}</button>
+          <button className="secondary-button" onClick={() => handleOptimize("humanize")} disabled={loading || !aiCfg.api_key.trim() || !article.trim()}>{t("btn.humanize")}</button>
+          <button className="secondary-button" onClick={handleDetectAi} disabled={loading || !aiCfg.api_key.trim() || !article.trim()}>{t("btn.detectAi")}</button>
         </div>
 
         {showWarmup && <div className="warmup-banner">{t("msg.serverWarmup")}</div>}

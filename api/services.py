@@ -79,10 +79,13 @@ def optimize_article_content(
             if not _c:
                 raise ValueError("AI returned empty response")
             raw = _c.strip()
+
+        optimized_article, changelog = parse_opt_result(raw)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI 服务调用失败: {type(e).__name__}: {e}")
 
-    optimized_article, changelog = parse_opt_result(raw)
     if not optimized_article or optimized_article == raw:
         raise HTTPException(status_code=502, detail="AI 返回格式异常，优化失败，请重试")
 
@@ -116,5 +119,7 @@ def detect_ai_content(article: str, api_key: str, model: str, base_url: str = ""
             if not _c:
                 raise ValueError("AI returned empty response")
             return _c.strip()
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI 检测服务调用失败: {type(e).__name__}: {e}")

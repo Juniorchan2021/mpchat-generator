@@ -3,6 +3,7 @@
 import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { marked } from "marked";
 import { useEffect, useMemo, useState, useCallback } from "react";
 
 import { api } from "@/lib/api";
@@ -87,13 +88,20 @@ function interleaveImages(markdown: string, images: Array<{ url: string; alt_tex
   return result.join("\n");
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 function toStyledHtml(title: string, meta: string, article: string): string {
+  const htmlContent = marked.parse(article) as string;
+  const safeTitle = escapeHtml(title);
+  const safeMeta = escapeHtml(meta);
   return `<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="utf-8"><title>${title}</title>
-<meta name="description" content="${meta}">
+<html lang="zh-CN"><head><meta charset="utf-8"><title>${safeTitle}</title>
+<meta name="description" content="${safeMeta}">
 <style>body{max-width:780px;margin:2rem auto;font-family:system-ui,sans-serif;line-height:1.7;color:#222;padding:0 1rem}
 h1{font-size:2rem}h2{font-size:1.4rem;margin-top:2rem}img{max-width:100%;border-radius:8px}</style>
-</head><body><h1>${title}</h1>${article}</body></html>`;
+</head><body><h1>${safeTitle}</h1>${htmlContent}</body></html>`;
 }
 
 const LOAD_KEY = "mpchat-load-workspace";
@@ -270,7 +278,7 @@ export function WorkspaceClient() {
     const err = validate();
     if (err) { setError(err); return; }
     const warmupTimer = setTimeout(() => setShowWarmup(true), 5000);
-    try { setIsLoading(true); setError(""); setChangelog([]); setAiDetect(null); setSchemas(null);
+    try { setIsLoading(true); setError(""); setChangelog([]); setAiDetect(null); setSchemas(null); setSeo(null); setGeo(null);
       const generated = await api.generate({ ...form, word_count_target: wordCountTarget });
       setResult(generated);
       await runAnalyses(generated, form.keywords, form.selling_points);
@@ -281,7 +289,7 @@ export function WorkspaceClient() {
     if (!result) return;
     const warmupTimer = setTimeout(() => setShowWarmup(true), 8000);
     try {
-      setIsLoading(true); setOptimizingMode(mode); setError("");
+      setIsLoading(true); setOptimizingMode(mode); setError(""); setSeo(null); setGeo(null);
       const optimized = await api.optimize({ provider: form.provider, api_key: form.api_key, model: form.model, base_url: form.base_url, article: result.article, keywords: form.keywords, mode });
       const nextResult = { ...result, article: optimized.optimized_article };
       setResult(nextResult); setChangelog(optimized.changelog);
@@ -293,7 +301,7 @@ export function WorkspaceClient() {
 
   function parseAiDetectResult(raw: unknown): AiDetectResult {
     if (raw == null) return { score: 0, traces: [], high_risk_paragraphs: [], summary: "" };
-    if (raw && typeof raw === "object" && "score" in raw) return raw as AiDetectResult;
+    if (raw && typeof raw === "object" && "score" in raw) { const result = raw as AiDetectResult; if (result.score > 1) result.score = result.score / 100; return result; }
     const text = typeof raw === "string" ? raw : JSON.stringify(raw);
     let score = 0;
     const scoreMatch = text.match(/(?:AI\s*评分|score)[：:]\s*(\d+)/i);

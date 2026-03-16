@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from functools import partial
 
@@ -14,6 +15,7 @@ from core.seo_tools import generate_slug, reading_stats
 from core.serp_analyzer import analyze_serp, serp_to_prompt_context
 
 router = APIRouter(prefix="/api/v1", tags=["generate"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/generate", response_model=GenerateResponse)
@@ -38,47 +40,55 @@ async def create_article(req: GenerateRequest):
             serp_data = await asyncio.to_thread(analyze_serp, primary_keyword)
             if serp_data:
                 web_content += "\n\n" + serp_to_prompt_context(serp_data)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("SERP analysis failed: %s", e)
 
-    result = await asyncio.to_thread(
-        partial(
-            generate_article,
-            model=req.model,
-            language=req.language,
-            scenario_label=req.scenario,
-            audience_tag=scenario.get("audience_tag", ""),
-            selling_points_text=selling_points_text(selected_points),
-            style_name=req.style,
-            style_instruction=style_instruction,
-            keywords=req.keywords,
-            web_content=web_content,
-            geo_mode=req.geo_mode,
-            word_count_target=req.word_count_target,
-            provider=req.provider,
-            api_key=req.api_key,
-            base_url=req.base_url,
+    try:
+        result = await asyncio.to_thread(
+            partial(
+                generate_article,
+                model=req.model,
+                language=req.language,
+                scenario_label=req.scenario,
+                audience_tag=scenario.get("audience_tag", ""),
+                selling_points_text=selling_points_text(selected_points),
+                style_name=req.style,
+                style_instruction=style_instruction,
+                keywords=req.keywords,
+                web_content=web_content,
+                geo_mode=req.geo_mode,
+                word_count_target=req.word_count_target,
+                provider=req.provider,
+                api_key=req.api_key,
+                base_url=req.base_url,
+            )
         )
-    )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"文章生成失败: {type(e).__name__}: {e}")
 
     title = result.get("seo_title", req.scenario)
     article = result.get("article", "")
-    stats = reading_stats(article, req.keywords)
+    stats = await asyncio.to_thread(reading_stats, article, req.keywords)
 
     images: list[dict] = []
     if req.include_images:
-        fetched = await asyncio.to_thread(
-            partial(
-                fetch_images_for_article,
-                pixabay_key=os.getenv("PIXABAY_API_KEY", "46561407-37c6214d0e52dffc32a430eb3"),
-                pexels_key=os.getenv("PEXELS_API_KEY", "YszqWzFI3WsjAq1gxox3BHOTfD3bOLlFmQZBoap418G6YYVaxhWC1HZz"),
-                scenario_terms=scenario.get("pixabay_terms", []),
-                ai_terms=result.get("image_search_terms", []),
-                article_title=title,
-                per_query=max(1, min(req.image_count, 3)),
+        try:
+            fetched = await asyncio.to_thread(
+                partial(
+                    fetch_images_for_article,
+                    pixabay_key=os.getenv("PIXABAY_API_KEY", "46561407-37c6214d0e52dffc32a430eb3"),
+                    pexels_key=os.getenv("PEXELS_API_KEY", "YszqWzFI3WsjAq1gxox3BHOTfD3bOLlFmQZBoap418G6YYVaxhWC1HZz"),
+                    scenario_terms=scenario.get("pixabay_terms", []),
+                    ai_terms=result.get("image_search_terms", []),
+                    article_title=title,
+                    per_query=max(1, min(req.image_count, 3)),
+                )
             )
-        )
-        images = fetched[: req.image_count]
+            images = fetched[: req.image_count]
+        except Exception as e:
+            logger.warning("Image fetching failed, proceeding without images: %s", e)
 
     return GenerateResponse(
         title=title,

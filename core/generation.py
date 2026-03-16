@@ -43,6 +43,7 @@ def call_llm(
         resp = client.messages.create(
             model=model,
             max_tokens=max_tokens,
+            temperature=temperature,
             system=system_msg,
             messages=user_msgs,
         )
@@ -61,9 +62,13 @@ def call_llm(
             kwargs["response_format"] = response_format
         try:
             resp = client.chat.completions.create(**kwargs)
-        except Exception:
-            kwargs.pop("response_format", None)
-            resp = client.chat.completions.create(**kwargs)
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "response_format" in err_msg or "json_object" in err_msg or "unsupported" in err_msg:
+                kwargs.pop("response_format", None)
+                resp = client.chat.completions.create(**kwargs)
+            else:
+                raise
         content = resp.choices[0].message.content if resp.choices else None
         if not content:
             raise ValueError("LLM returned empty response")
