@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter
 
 from api.models.requests import ExternalAnalyzeRequest, OptimizeRequest
@@ -10,8 +12,8 @@ router = APIRouter(prefix="/api/v1/external", tags=["external"])
 
 @router.post("/analyze")
 async def analyze_external(req: ExternalAnalyzeRequest):
-    seo = reading_stats(req.article, req.keywords)
-    geo = geo_score(req.article, [])
+    seo = await asyncio.to_thread(reading_stats, req.article, req.keywords)
+    geo = await asyncio.to_thread(geo_score, req.article, [])
     return {
         "seo": seo,
         "geo": geo,
@@ -20,7 +22,8 @@ async def analyze_external(req: ExternalAnalyzeRequest):
 
 @router.post("/optimize")
 async def optimize_external(req: OptimizeRequest):
-    return optimize_article_content(
+    return await asyncio.to_thread(
+        optimize_article_content,
         article=req.article,
         keywords=req.keywords,
         mode=req.mode,

@@ -75,7 +75,10 @@ def optimize_article_content(
             response = client.chat.completions.create(
                 model=model, messages=messages, temperature=0.6, max_tokens=16000,
             )
-            raw = response.choices[0].message.content.strip()
+            _c = response.choices[0].message.content if response.choices else None
+            if not _c:
+                raise ValueError("AI returned empty response")
+            raw = _c.strip()
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI 服务调用失败: {type(e).__name__}: {e}")
 
@@ -109,6 +112,9 @@ def detect_ai_content(article: str, api_key: str, model: str, base_url: str = ""
             response = client.chat.completions.create(
                 model=model, messages=messages, temperature=0.3, max_tokens=2000,
             )
-            return response.choices[0].message.content.strip()
+            _c = response.choices[0].message.content if response.choices else None
+            if not _c:
+                raise ValueError("AI returned empty response")
+            return _c.strip()
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI 检测服务调用失败: {type(e).__name__}: {e}")

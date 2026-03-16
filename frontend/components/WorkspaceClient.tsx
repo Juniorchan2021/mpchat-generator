@@ -209,7 +209,7 @@ export function WorkspaceClient() {
     }
   }, [form.provider, form.model, form.api_key, form.base_url]);
 
-  const selectedProvider = useMemo(() => config?.providers.find((p) => p.id === form.provider), [config, form.provider]);
+  const selectedProvider = useMemo(() => config?.providers?.find((p) => p.id === form.provider), [config, form.provider]);
   const scenarios = useMemo(() => (config ? config.scenario_categories[form.category] || [] : []), [config, form.category]);
   const selectedScenario = useMemo(() => scenarios.find((s) => s.label === form.scenario), [scenarios, form.scenario]);
   const allScenarios = useMemo(() => {
@@ -229,7 +229,7 @@ export function WorkspaceClient() {
     setForm((prev) => ({ ...prev, scenario: label, keywords: next?.keywords || prev.keywords, selling_points: next?.selling_points || prev.selling_points }));
   }
   function handleProviderChange(providerId: string) {
-    const next = config?.providers.find((p) => p.id === providerId);
+    const next = config?.providers?.find((p) => p.id === providerId);
     const newKey = providerId === "gemini" ? DEFAULT_GEMINI_KEY : "";
     setForm((prev) => ({ ...prev, provider: providerId, model: next?.models?.[0] || prev.model, base_url: next?.base_url || prev.base_url, api_key: newKey }));
   }
@@ -395,7 +395,7 @@ export function WorkspaceClient() {
           </div>
         </div>
         <div className="form-grid">
-          <label><span>Provider</span><select value={form.provider} onChange={(e) => handleProviderChange(e.target.value)}>{config?.providers.map((p) => (<option key={p.id} value={p.id}>{p.label}</option>))}</select></label>
+          <label><span>Provider</span><select value={form.provider} onChange={(e) => handleProviderChange(e.target.value)}>{(config?.providers ?? []).map((p) => (<option key={p.id} value={p.id}>{p.label}</option>))}</select></label>
           <label><span>Model</span><select value={form.model} onChange={(e) => updateForm("model", e.target.value)}>{(selectedProvider?.models || [form.model]).map((m) => (<option key={m} value={m}>{m}</option>))}</select></label>
           <label><span>Language</span><select value={form.language} onChange={(e) => updateForm("language", e.target.value)}>{Object.keys(config?.languages || {}).map((l) => (<option key={l} value={l}>{l}</option>))}</select></label>
           <label><span>Style</span><select value={form.style} onChange={(e) => updateForm("style", e.target.value)}>{Object.keys(config?.article_styles || {}).map((s) => (<option key={s} value={s}>{s}</option>))}</select></label>
@@ -612,8 +612,8 @@ export function WorkspaceClient() {
                   <ScoreRing score={Math.round((1 - aiDetect.score) * 100)} label="人性化得分" size={100} />
                   <div className="glass-card" style={{flex:1,padding:16}}><h4>检测摘要</h4><div className="rendered-article" style={{fontSize:"0.9rem"}}><ReactMarkdown remarkPlugins={[remarkGfm]}>{aiDetect.summary}</ReactMarkdown></div></div>
                 </div>
-                {(aiDetect.traces?.length ?? 0) > 0 && (<div style={{marginBottom:16}}><h4>AI 痕迹</h4><ul className="plain-list">{aiDetect.traces.map((tr) => (<li key={tr} style={{color:"var(--warning)"}}>{tr}</li>))}</ul></div>)}
-                {(aiDetect.high_risk_paragraphs?.length ?? 0) > 0 && (<div><h4>高风险段落</h4>{aiDetect.high_risk_paragraphs.map((p, i) => (<pre key={i} className="article-card" style={{borderColor:"rgba(255,107,129,0.3)",marginBottom:8,fontSize:"0.85rem"}}>{p}</pre>))}</div>)}
+                {(aiDetect.traces?.length ?? 0) > 0 && (<div style={{marginBottom:16}}><h4>AI 痕迹</h4><ul className="plain-list">{(aiDetect.traces ?? []).map((tr) => (<li key={tr} style={{color:"var(--warning)"}}>{tr}</li>))}</ul></div>)}
+                {(aiDetect.high_risk_paragraphs?.length ?? 0) > 0 && (<div><h4>高风险段落</h4>{(aiDetect.high_risk_paragraphs ?? []).map((p, i) => (<pre key={i} className="article-card" style={{borderColor:"rgba(255,107,129,0.3)",marginBottom:8,fontSize:"0.85rem"}}>{p}</pre>))}</div>)}
               </div>)}
             </section>
           )}

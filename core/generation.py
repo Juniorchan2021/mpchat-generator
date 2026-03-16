@@ -46,6 +46,8 @@ def call_llm(
             system=system_msg,
             messages=user_msgs,
         )
+        if not resp.content:
+            raise ValueError("Anthropic returned empty response")
         return resp.content[0].text
     else:
         client = get_client(api_key, base_url)
@@ -62,7 +64,10 @@ def call_llm(
         except Exception:
             kwargs.pop("response_format", None)
             resp = client.chat.completions.create(**kwargs)
-        return resp.choices[0].message.content
+        content = resp.choices[0].message.content if resp.choices else None
+        if not content:
+            raise ValueError("LLM returned empty response")
+        return content
 
 
 def geo_prompt_section() -> str:
@@ -314,7 +319,10 @@ def generate_article(
                 )
             else:
                 raise
-        raw_text = response.choices[0].message.content.strip()
+        _content = response.choices[0].message.content if response.choices else None
+        if not _content:
+            raise ValueError("LLM returned empty response")
+        raw_text = _content.strip()
     else:
         raise ValueError("Either (provider + api_key) or client must be provided")
 
@@ -348,6 +356,8 @@ def build_seo_optimize_prompt(article: str, keywords: str, issues: list[str]) ->
 
 
 def parse_opt_result(raw: str) -> tuple[str, list[str]]:
+    if not raw:
+        raise ValueError("AI returned empty optimization result")
     cleaned = strip_code_fences(raw.strip())
     for candidate in (
         cleaned,

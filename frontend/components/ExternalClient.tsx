@@ -306,10 +306,10 @@ export function ExternalClient() {
             <div style={{flex:1}}><p className="muted-text">{aiDetect.summary}</p></div>
           </div>
           {(aiDetect.traces?.length ?? 0) > 0 && (
-            <div style={{marginBottom:12}}><h4>AI 痕迹</h4><ul className="plain-list">{aiDetect.traces.map((tr) => (<li key={tr} style={{color:"var(--warning)"}}>{tr}</li>))}</ul></div>
+            <div style={{marginBottom:12}}><h4>AI 痕迹</h4><ul className="plain-list">{(aiDetect.traces ?? []).map((tr) => (<li key={tr} style={{color:"var(--warning)"}}>{tr}</li>))}</ul></div>
           )}
           {(aiDetect.high_risk_paragraphs?.length ?? 0) > 0 && (
-            <div><h4>高风险段落</h4>{aiDetect.high_risk_paragraphs.map((p, i) => (<pre key={i} className="article-card" style={{borderColor:"rgba(255,107,129,0.3)",marginBottom:8,fontSize:"0.85rem"}}>{p}</pre>))}</div>
+            <div><h4>高风险段落</h4>{(aiDetect.high_risk_paragraphs ?? []).map((p, i) => (<pre key={i} className="article-card" style={{borderColor:"rgba(255,107,129,0.3)",marginBottom:8,fontSize:"0.85rem"}}>{p}</pre>))}</div>
           )}
         </section>
       )}
@@ -318,12 +318,12 @@ export function ExternalClient() {
         <section className="results-grid">
           <div className="glass-card">
             <h2>SEO 诊断</h2>
-            <ScoreRing score={analysis.seo.structure_score ?? 0} label="SEO" size={100} />
+            <ScoreRing score={analysis.seo?.structure_score ?? 0} label="SEO" size={100} />
             <pre className="article-card" style={{marginTop:12}}>{JSON.stringify(analysis.seo, null, 2)}</pre>
           </div>
           <div className="glass-card">
             <h2>GEO 诊断</h2>
-            <ScoreRing score={analysis.geo.score ?? 0} label="GEO" size={100} />
+            <ScoreRing score={analysis.geo?.score ?? 0} label="GEO" size={100} />
             <pre className="article-card" style={{marginTop:12}}>{JSON.stringify(analysis.geo, null, 2)}</pre>
           </div>
         </section>

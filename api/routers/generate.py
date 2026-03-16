@@ -34,8 +34,12 @@ async def create_article(req: GenerateRequest):
     serp_data = None
     if req.use_serp and req.keywords.strip():
         primary_keyword = req.keywords.split(",")[0].strip()
-        serp_data = await asyncio.to_thread(analyze_serp, primary_keyword)
-        web_content += "\n\n" + serp_to_prompt_context(serp_data)
+        try:
+            serp_data = await asyncio.to_thread(analyze_serp, primary_keyword)
+            if serp_data:
+                web_content += "\n\n" + serp_to_prompt_context(serp_data)
+        except Exception:
+            pass
 
     result = await asyncio.to_thread(
         partial(

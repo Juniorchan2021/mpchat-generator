@@ -1,4 +1,6 @@
-from fastapi import APIRouter
+import asyncio
+
+from fastapi import APIRouter, HTTPException
 
 from api.models.requests import ImageSearchRequest, LinksRequest, SchemaRequest, SerpAnalyzeRequest, SlugRequest
 from core.geo_tools import generate_faq_schema
@@ -38,13 +40,17 @@ async def create_links(req: LinksRequest):
 
 @router.post("/serp/analyze")
 async def serp_analyze(req: SerpAnalyzeRequest):
-    return analyze_serp(req.keyword)
+    try:
+        return await asyncio.to_thread(analyze_serp, req.keyword)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"SERP 分析失败: {type(e).__name__}: {e}")
 
 
 @router.post("/images/search")
 async def image_search(req: ImageSearchRequest):
-    return {
-        "images": fetch_images_for_article(
+    try:
+        images = await asyncio.to_thread(
+            fetch_images_for_article,
             pixabay_key=req.pixabay_key,
             pexels_key=req.pexels_key,
             scenario_terms=req.scenario_terms,
@@ -52,4 +58,6 @@ async def image_search(req: ImageSearchRequest):
             article_title=req.article_title,
             per_query=req.per_query,
         )
-    }
+        return {"images": images}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"图片搜索失败: {type(e).__name__}: {e}")
