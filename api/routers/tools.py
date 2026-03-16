@@ -1,13 +1,12 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from api.deps import verify_api_key
 from api.models.requests import ImageSearchRequest, LinksRequest, SchemaRequest, SerpAnalyzeRequest, SlugRequest
 from core.geo_tools import generate_faq_schema
 from core.image_client import fetch_images_for_article
 from core.seo_tools import generate_internal_links, generate_schema, generate_slug
 from core.serp_analyzer import analyze_serp
 
-router = APIRouter(prefix="/api/v1", tags=["tools"], dependencies=[Depends(verify_api_key)])
+router = APIRouter(prefix="/api/v1", tags=["tools"])
 
 
 @router.post("/schema")

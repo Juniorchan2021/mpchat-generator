@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from api.deps import verify_api_key
 from api.models.requests import PublishRequest
 from core.publishers import (
     format_for_crypto_submission,
@@ -13,7 +12,7 @@ from core.publishers import (
     publish_to_hashnode,
 )
 
-router = APIRouter(prefix="/api/v1/publish", tags=["publish"], dependencies=[Depends(verify_api_key)])
+router = APIRouter(prefix="/api/v1/publish", tags=["publish"])
 
 
 @router.post("/devto")

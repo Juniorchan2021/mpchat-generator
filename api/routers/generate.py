@@ -1,8 +1,7 @@
 import os
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 
-from api.deps import verify_api_key
 from api.models.requests import GenerateRequest
 from api.models.responses import GenerateResponse
 from api.utils import locate_scenario, selling_points_text, style_to_instruction
@@ -12,7 +11,7 @@ from core.knowledge import fetch_web_knowledge
 from core.seo_tools import generate_slug, reading_stats
 from core.serp_analyzer import analyze_serp, serp_to_prompt_context
 
-router = APIRouter(prefix="/api/v1", tags=["generate"], dependencies=[Depends(verify_api_key)])
+router = APIRouter(prefix="/api/v1", tags=["generate"])
 
 
 @router.post("/generate", response_model=GenerateResponse)

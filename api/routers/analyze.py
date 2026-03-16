@@ -1,12 +1,11 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from api.deps import verify_api_key
 from api.models.requests import ArticleAnalyzeRequest
 from api.models.responses import AnalyzeResponse
 from core.geo_tools import geo_score
 from core.seo_tools import reading_stats
 
-router = APIRouter(prefix="/api/v1/analyze", tags=["analyze"], dependencies=[Depends(verify_api_key)])
+router = APIRouter(prefix="/api/v1/analyze", tags=["analyze"])
 
 
 @router.post("/seo", response_model=AnalyzeResponse)

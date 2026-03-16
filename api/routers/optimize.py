@@ -1,11 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from api.deps import verify_api_key
 from api.models.requests import AiDetectRequest, OptimizeRequest
 from api.models.responses import OptimizeResponse
 from api.services import detect_ai_content, optimize_article_content
 
-router = APIRouter(prefix="/api/v1", tags=["optimize"], dependencies=[Depends(verify_api_key)])
+router = APIRouter(prefix="/api/v1", tags=["optimize"])
 
 
 @router.post("/optimize", response_model=OptimizeResponse)
