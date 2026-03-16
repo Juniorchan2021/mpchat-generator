@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from api.deps import verify_api_key
 from core.providers import list_providers
 from core.scenarios import ARTICLE_STYLES, KEYWORD_PRESETS, LANGUAGES, SCENARIO_CATEGORIES, SELLING_POINT_GROUPS
 
-router = APIRouter(prefix="/api/v1/config", tags=["config"], dependencies=[Depends(verify_api_key)])
+router = APIRouter(prefix="/api/v1/config", tags=["config"])
 
 
 @router.get("/providers")
