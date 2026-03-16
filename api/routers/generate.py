@@ -59,8 +59,8 @@ async def create_article(req: GenerateRequest):
     images: list[dict] = []
     if req.include_images:
         images = fetch_images_for_article(
-            pixabay_key=os.getenv("PIXABAY_API_KEY", ""),
-            pexels_key=os.getenv("PEXELS_API_KEY", ""),
+            pixabay_key=os.getenv("PIXABAY_API_KEY", "46561407-37c6214d0e52dffc32a430eb3"),
+            pexels_key=os.getenv("PEXELS_API_KEY", "YszqWzFI3WsjAq1gxox3BHOTfD3bOLlFmQZBoap418G6YYVaxhWC1HZz"),
             scenario_terms=scenario.get("pixabay_terms", []),
             ai_terms=result.get("image_search_terms", []),
             article_title=title,
