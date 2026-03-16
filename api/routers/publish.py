@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter
 
 from api.models.requests import PublishRequest
@@ -17,7 +19,8 @@ router = APIRouter(prefix="/api/v1/publish", tags=["publish"])
 
 @router.post("/devto")
 async def publish_devto(req: PublishRequest):
-    return publish_to_devto(
+    return await asyncio.to_thread(
+        publish_to_devto,
         api_key=req.api_key,
         title=req.title,
         body_markdown=req.article,
@@ -29,7 +32,8 @@ async def publish_devto(req: PublishRequest):
 
 @router.post("/hashnode")
 async def publish_hashnode(req: PublishRequest):
-    return publish_to_hashnode(
+    return await asyncio.to_thread(
+        publish_to_hashnode,
         token=req.token,
         publication_id=req.publication_id,
         title=req.title,

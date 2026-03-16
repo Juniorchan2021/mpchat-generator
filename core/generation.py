@@ -367,7 +367,7 @@ def parse_opt_result(raw: str) -> tuple[str, list[str]]:
         try:
             data = json.loads(candidate)
             if isinstance(data, dict) and data.get("optimized_article"):
-                changelog = data.get("changelog", [])
+                changelog = data.get("changelog") or []
                 return data["optimized_article"], changelog if isinstance(changelog, list) else []
         except (json.JSONDecodeError, ValueError):
             pass

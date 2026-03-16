@@ -292,6 +292,7 @@ export function WorkspaceClient() {
   }
 
   function parseAiDetectResult(raw: unknown): AiDetectResult {
+    if (raw == null) return { score: 0, traces: [], high_risk_paragraphs: [], summary: "" };
     if (raw && typeof raw === "object" && "score" in raw) return raw as AiDetectResult;
     const text = typeof raw === "string" ? raw : JSON.stringify(raw);
     let score = 0;
@@ -424,7 +425,7 @@ export function WorkspaceClient() {
 
         {selectedScenario && form.selling_points.length === 0 && (
           <div className="pill-row" style={{marginTop:8}}><span className="subtle-label">场景默认卖点</span>
-            {(selectedScenario as Scenario).selling_points.map((sp) => (<button className="pill preset-chip" key={sp} onClick={() => toggleSellingPoint(sp)}>{sp}</button>))}
+            {((selectedScenario as Scenario).selling_points ?? []).map((sp) => (<button className="pill preset-chip" key={sp} onClick={() => toggleSellingPoint(sp)}>{sp}</button>))}
           </div>
         )}
 
@@ -524,7 +525,7 @@ export function WorkspaceClient() {
                   <h3>图片与提示词</h3>
                   <div className="image-grid">{(result.images ?? []).map((img) => (
                     <div key={img.url} style={{position:"relative"}}><Image src={img.url} alt={img.alt_text || result.title} className="preview-image" width={640} height={480} unoptimized />
-                      {img.photographer && (<span style={{fontSize:"0.7rem",color:"var(--muted)",display:"block",marginTop:2}}>{img.photographer} ({img.source})</span>)}
+                      {img.photographer && (<span style={{fontSize:"0.7rem",color:"var(--muted)",display:"block",marginTop:2}}>{img.photographer} ({img.source || ""})</span>)}
                     </div>
                   ))}</div>
                   {(result.image_prompts ?? []).length > 0 && (<><h4>AI 图片提示词</h4><ul className="plain-list">{(result.image_prompts ?? []).map((ip) => (<li key={ip.prompt}><strong>{ip.scene}</strong><p style={{margin:"4px 0 0",color:"var(--muted)",fontSize:"0.85rem"}}>{ip.prompt}</p></li>))}</ul></>)}

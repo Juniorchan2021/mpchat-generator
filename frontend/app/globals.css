@@ -712,22 +712,6 @@ input[type="range"]:focus {
   text-decoration: underline;
 }
 
-/* ── Warmup Banner ── */
-@keyframes warmup-pulse {
-  0%, 100% { opacity: 0.7; }
-  50% { opacity: 1; }
-}
-
-.warmup-banner {
-  padding: 10px 16px;
-  background: rgba(99, 91, 255, 0.15);
-  border: 1px solid rgba(99, 91, 255, 0.2);
-  border-radius: 12px;
-  font-size: 0.88rem;
-  color: var(--muted);
-  animation: warmup-pulse 2s ease-in-out infinite;
-  margin-top: 8px;
-}
 
 /* ── Rendered Article Styles ── */
 .rendered-article {

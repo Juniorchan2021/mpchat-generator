@@ -21,7 +21,7 @@ const I18nContext = createContext<I18nCtx>({
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(() => {
     if (typeof window !== "undefined") {
-      return (localStorage.getItem("mpchat-locale") as Locale) || "zh";
+      const stored = localStorage.getItem("mpchat-locale"); return stored === "zh" || stored === "en" ? stored : "zh";
     }
     return "zh";
   });

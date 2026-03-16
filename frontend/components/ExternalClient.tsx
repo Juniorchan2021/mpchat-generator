@@ -141,6 +141,7 @@ export function ExternalClient() {
   }
 
   function parseAiDetectResult(raw: unknown): AiDetectResult {
+    if (raw == null) return { score: 0, traces: [], high_risk_paragraphs: [], summary: "" };
     if (raw && typeof raw === "object" && "score" in raw) return raw as AiDetectResult;
     const text = typeof raw === "string" ? raw : JSON.stringify(raw);
     let score = 0;
