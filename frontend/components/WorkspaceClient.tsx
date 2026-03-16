@@ -1,11 +1,14 @@
 "use client";
 
 import Image from "next/image";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useEffect, useMemo, useState, useCallback } from "react";
 
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { saveAiConfig } from "@/lib/aiConfig";
+import { FALLBACK_CONFIG } from "@/lib/fallbackConfig";
 import { pushHistory } from "@/lib/history";
 import { ScoreRing, BreakdownBar } from "@/components/ScoreRing";
 import type {
@@ -65,6 +68,23 @@ function copyText(text: string) {
   navigator.clipboard.writeText(text);
 }
 
+function interleaveImages(markdown: string, images: Array<{ url: string; alt_text?: string; photographer?: string; source?: string }>): string {
+  if (!images.length) return markdown;
+  const sections = markdown.split(/\n(?=##\s)/);
+  if (sections.length <= 1) return markdown;
+  const result: string[] = [sections[0]];
+  for (let i = 1; i < sections.length; i++) {
+    const img = images[(i - 1) % images.length];
+    if (img && i <= images.length) {
+      const alt = img.alt_text || "article image";
+      const credit = img.photographer ? ` *Photo: ${img.photographer} (${img.source || ""})*` : "";
+      result.push(`\n![${alt}](${img.url})\n${credit}\n`);
+    }
+    result.push(sections[i]);
+  }
+  return result.join("\n");
+}
+
 function toStyledHtml(title: string, meta: string, article: string): string {
   return `<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8"><title>${title}</title>
@@ -85,7 +105,14 @@ export function WorkspaceClient() {
   const [geo, setGeo] = useState<AnalyzeResponse | null>(null);
   const [changelog, setChangelog] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [optimizingMode, setOptimizingMode] = useState<string | null>(null);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(""), 8000);
+    return () => clearTimeout(t);
+  }, [error]);
   const [resultTab, setResultTab] = useState<ResultTab>("article");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [wordCountTarget, setWordCountTarget] = useState(1200);
@@ -106,12 +133,16 @@ export function WorkspaceClient() {
   const [schemas, setSchemas] = useState<{ article_schema: Record<string, unknown>; faq_schema: Record<string, unknown> } | null>(null);
   const [internalLinks, setInternalLinks] = useState<Array<{ text: string; url: string }>>([]);
 
+  const [configLoading, setConfigLoading] = useState(true);
+  const [configOffline, setConfigOffline] = useState(false);
+
   useEffect(() => {
-    api.getConfig().then((data) => {
+    let retried = false;
+    function applyConfig(data: ConfigData) {
       setConfig(data);
       const category = Object.keys(data.scenario_categories)[0] || "";
       const firstScenario = data.scenario_categories[category]?.[0];
-      const firstProvider = data.providers[0];
+      const firstProvider = data.providers.find((p) => p.id === "gemini") || data.providers[0];
       const firstStyle = Object.keys(data.article_styles)[0] || "";
       const firstLanguage = Object.keys(data.languages)[0] || "";
       setForm((prev) => ({
@@ -126,7 +157,23 @@ export function WorkspaceClient() {
         keywords: firstScenario?.keywords || "",
         selling_points: firstScenario?.selling_points || [],
       }));
-    }).catch((err: Error) => setError(err.message));
+      setConfigLoading(false);
+    }
+    function loadConfig() {
+      api.getConfig().then((data) => {
+        applyConfig(data);
+        setConfigOffline(false);
+      }).catch(() => {
+        if (!retried) {
+          retried = true;
+          setTimeout(loadConfig, 3000);
+        } else {
+          applyConfig(FALLBACK_CONFIG);
+          setConfigOffline(true);
+        }
+      });
+    }
+    loadConfig();
   }, []);
 
   useEffect(() => {
@@ -221,19 +268,35 @@ export function WorkspaceClient() {
 
   async function handleOptimize(mode: "seo" | "geo" | "dual" | "triple" | "humanize") {
     if (!result) return;
-    try { setIsLoading(true); setError("");
+    const warmupTimer = setTimeout(() => setShowWarmup(true), 8000);
+    try {
+      setIsLoading(true); setOptimizingMode(mode); setError("");
       const optimized = await api.optimize({ provider: form.provider, api_key: form.api_key, model: form.model, base_url: form.base_url, article: result.article, keywords: form.keywords, mode });
       const nextResult = { ...result, article: optimized.optimized_article };
       setResult(nextResult); setChangelog(optimized.changelog);
       await runAnalyses(nextResult, form.keywords);
-    } catch (e) { setError(e instanceof Error ? e.message : "优化失败"); } finally { setIsLoading(false); }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "优化失败，后端处理时间较长，请稍后重试");
+    } finally { clearTimeout(warmupTimer); setShowWarmup(false); setIsLoading(false); setOptimizingMode(null); }
+  }
+
+  function parseAiDetectResult(raw: unknown): AiDetectResult {
+    if (raw && typeof raw === "object" && "score" in raw) return raw as AiDetectResult;
+    const text = typeof raw === "string" ? raw : JSON.stringify(raw);
+    let score = 0;
+    const scoreMatch = text.match(/(?:AI\s*评分|score)[：:]\s*(\d+)/i);
+    if (scoreMatch) score = parseInt(scoreMatch[1], 10) / 100;
+    const traces: string[] = [];
+    const traceMatches = text.match(/\*\s+\*\*([^*]+)\*\*/g);
+    if (traceMatches) traceMatches.forEach((m) => traces.push(m.replace(/\*+/g, "").trim()));
+    return { score, traces, high_risk_paragraphs: [], summary: text };
   }
 
   async function handleDetectAi() {
     if (!result) return;
     try { setIsLoading(true); setError("");
       const resp = await api.detectAi({ api_key: form.api_key, model: form.model, base_url: form.base_url, article: result.article, provider: form.provider });
-      setAiDetect(resp.result);
+      setAiDetect(parseAiDetectResult(resp.result));
     } catch (e) { setError(e instanceof Error ? e.message : "检测失败"); } finally { setIsLoading(false); }
   }
 
@@ -279,7 +342,10 @@ export function WorkspaceClient() {
     const bd = seo?.breakdown as Record<string, unknown> | undefined;
     const kd = bd?.keyword_density;
     if (!kd || typeof kd !== "object") return [];
-    return Object.entries(kd as Record<string, number>).map(([k, v]) => ({ keyword: k, density: v }));
+    return Object.entries(kd as Record<string, unknown>).map(([k, v]) => ({
+      keyword: k,
+      density: typeof v === "number" ? v : (v && typeof v === "object" && "density_pct" in v) ? (v as Record<string, number>).density_pct : 0,
+    }));
   }, [seo]);
 
   return (
@@ -297,7 +363,8 @@ export function WorkspaceClient() {
         </div>
       </section>
 
-      <section className="glass-card">
+      <section className="glass-card" style={{position:"relative"}}>
+        {configLoading && <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.4)",borderRadius:"inherit",zIndex:10,fontSize:"1.1rem",color:"var(--muted)"}}>配置加载中...</div>}
         <div className="section-header">
           <div><h2>创作配置</h2><p>服务商、场景、文风、SERP/GEO 等一次配置完成。</p></div>
           <div className="action-row">
@@ -376,7 +443,15 @@ export function WorkspaceClient() {
         </section>
       )}
 
-      {error ? <div className="error-banner">{error}</div> : null}
+      {configOffline && <div className="error-banner" style={{background:"rgba(255,165,0,0.15)",borderColor:"rgba(255,165,0,0.4)",color:"#ffaa33"}}>使用离线配置，部分场景数据可能不完整。后端连接恢复后请刷新页面。</div>}
+      {error ? <div className="error-banner toast-error" onClick={() => setError("")}><span>{error}</span><span style={{cursor:"pointer",marginLeft:12,opacity:0.6}}>✕</span></div> : null}
+
+      {showWarmup && (
+        <div className="warmup-banner">
+          <div className="warmup-spinner" />
+          <span>{optimizingMode ? `AI 正在${optimizingMode === "triple" ? "三合一" : optimizingMode === "dual" ? "双重" : optimizingMode.toUpperCase()}优化，可能需要 30-60 秒...` : "AI 正在生成文章，可能需要 30-60 秒..."}</span>
+        </div>
+      )}
 
       {batchMode && batchResults.length > 0 && (
         <section className="glass-card">
@@ -386,7 +461,7 @@ export function WorkspaceClient() {
               <div className="section-header"><div><h3>{b.result.title}</h3><p className="muted-text">{b.scenario}</p></div>
                 <div className="score-strip"><div className="score-card"><span>SEO</span><strong>{b.seoScore}</strong></div><div className="score-card"><span>GEO</span><strong>{b.geoScore}</strong></div></div>
               </div>
-              <pre className="article-card clamp-article">{b.result.article}</pre>
+              <div className="article-card clamp-article rendered-article"><ReactMarkdown remarkPlugins={[remarkGfm]}>{b.result.article}</ReactMarkdown></div>
               <button className="secondary-button" style={{marginTop:8}} onClick={() => downloadFile(b.result.article, `${b.result.slug || b.scenario}.md`, "text/markdown")}>下载</button>
             </div>
           ))}</div>
@@ -399,12 +474,12 @@ export function WorkspaceClient() {
             <ScoreRing score={seo?.score ?? 0} label="SEO" />
             <ScoreRing score={geo?.score ?? 0} label="GEO" />
             <div className="action-row" style={{marginLeft:"auto"}}>
-              <button className="secondary-button" onClick={() => handleOptimize("seo")} disabled={isLoading}>SEO 优化</button>
-              <button className="secondary-button" onClick={() => handleOptimize("geo")} disabled={isLoading}>GEO 优化</button>
-              <button className="secondary-button" onClick={() => handleOptimize("dual")} disabled={isLoading}>双优化</button>
-              <button className="primary-button" onClick={() => handleOptimize("triple")} disabled={isLoading}>三合一优化</button>
+              <button className="secondary-button" onClick={() => handleOptimize("seo")} disabled={isLoading}>{optimizingMode === "seo" ? "SEO 优化中..." : "SEO 优化"}</button>
+              <button className="secondary-button" onClick={() => handleOptimize("geo")} disabled={isLoading}>{optimizingMode === "geo" ? "GEO 优化中..." : "GEO 优化"}</button>
+              <button className="secondary-button" onClick={() => handleOptimize("dual")} disabled={isLoading}>{optimizingMode === "dual" ? "双优化中..." : "双优化"}</button>
+              <button className="primary-button" onClick={() => handleOptimize("triple")} disabled={isLoading}>{optimizingMode === "triple" ? "三合一优化中..." : "三合一优化"}</button>
               {((seo?.score ?? 100) < 90 || (geo?.score ?? 100) < 90) && (
-                <button className="primary-button" onClick={() => handleOptimize("triple")} disabled={isLoading} style={{background:"linear-gradient(135deg,var(--warning),var(--danger))"}}>一键优化到90+</button>
+                <button className="primary-button" onClick={() => handleOptimize("triple")} disabled={isLoading} style={{background:"linear-gradient(135deg,var(--warning),var(--danger))"}}>{optimizingMode === "triple" ? "优化中..." : "一键优化到90+"}</button>
               )}
             </div>
           </section>
@@ -420,7 +495,7 @@ export function WorkspaceClient() {
               <article className="glass-card">
                 <div className="section-header"><div><h2>{result.title}</h2><p>{result.meta_description}</p></div><span className="slug-chip">/{result.slug}</span></div>
                 <div className="pill-row">{result.ab_titles.map((t) => (<button className="pill preset-chip" key={t} onClick={() => handleAdoptTitle(t)} title="点击采用此标题">{t}</button>))}</div>
-                <div className="article-card">{result.article}</div>
+                <div className="article-card rendered-article"><ReactMarkdown remarkPlugins={[remarkGfm]}>{interleaveImages(result.article, result.images)}</ReactMarkdown></div>
               </article>
               <aside className="stack-column">
                 <div className="glass-card">
@@ -455,7 +530,7 @@ export function WorkspaceClient() {
                 </div>
                 <div><h3>GEO 详情</h3>{geo?.breakdown && Object.entries(geo.breakdown).map(([k,v]) => (<BreakdownBar key={k} label={k} value={Number(v) || 0} max={100} />))}</div>
               </div>
-              {keywordDensity.length > 0 && (<div style={{marginTop:20}}><h3>关键词密度</h3><table className="kw-table"><thead><tr><th>关键词</th><th>密度</th></tr></thead><tbody>{keywordDensity.map((kd) => (<tr key={kd.keyword}><td>{kd.keyword}</td><td>{typeof kd.density === "number" ? kd.density.toFixed(2) : kd.density}%</td></tr>))}</tbody></table></div>)}
+              {keywordDensity.length > 0 && (<div style={{marginTop:20}}><h3>关键词密度</h3><table className="kw-table"><thead><tr><th>关键词</th><th>密度</th></tr></thead><tbody>{keywordDensity.map((kd) => (<tr key={kd.keyword}><td>{kd.keyword}</td><td>{typeof kd.density === "number" ? kd.density.toFixed(2) : "0.00"}%</td></tr>))}</tbody></table></div>)}
               {result.serp && (<div style={{marginTop:20}}><h3>SERP 分析结果</h3><pre className="article-card" style={{maxHeight:300,overflow:"auto"}}>{JSON.stringify(result.serp, null, 2)}</pre></div>)}
               {schemas && (<div style={{marginTop:20}}><h3>JSON-LD Schema</h3><div className="seo-geo-grid">
                 <div><h4>Article Schema</h4><pre className="article-card" style={{fontSize:"0.8rem",maxHeight:260,overflow:"auto"}}>{JSON.stringify(schemas.article_schema, null, 2)}</pre><button className="secondary-button" style={{marginTop:6}} onClick={() => copyText(JSON.stringify(schemas.article_schema, null, 2))}>复制</button></div>
@@ -519,10 +594,10 @@ export function WorkspaceClient() {
               {aiDetect && (<div>
                 <div className="score-strip" style={{marginBottom:16}}>
                   <ScoreRing score={Math.round((1 - aiDetect.score) * 100)} label="人性化得分" size={100} />
-                  <div className="glass-card" style={{flex:1,padding:16}}><h4>检测摘要</h4><p className="muted-text">{aiDetect.summary}</p></div>
+                  <div className="glass-card" style={{flex:1,padding:16}}><h4>检测摘要</h4><div className="rendered-article" style={{fontSize:"0.9rem"}}><ReactMarkdown remarkPlugins={[remarkGfm]}>{aiDetect.summary}</ReactMarkdown></div></div>
                 </div>
-                {aiDetect.traces.length > 0 && (<div style={{marginBottom:16}}><h4>AI 痕迹</h4><ul className="plain-list">{aiDetect.traces.map((t) => (<li key={t} style={{color:"var(--warning)"}}>{t}</li>))}</ul></div>)}
-                {aiDetect.high_risk_paragraphs.length > 0 && (<div><h4>高风险段落</h4>{aiDetect.high_risk_paragraphs.map((p, i) => (<pre key={i} className="article-card" style={{borderColor:"rgba(255,107,129,0.3)",marginBottom:8,fontSize:"0.85rem"}}>{p}</pre>))}</div>)}
+                {(aiDetect.traces?.length ?? 0) > 0 && (<div style={{marginBottom:16}}><h4>AI 痕迹</h4><ul className="plain-list">{aiDetect.traces.map((tr) => (<li key={tr} style={{color:"var(--warning)"}}>{tr}</li>))}</ul></div>)}
+                {(aiDetect.high_risk_paragraphs?.length ?? 0) > 0 && (<div><h4>高风险段落</h4>{aiDetect.high_risk_paragraphs.map((p, i) => (<pre key={i} className="article-card" style={{borderColor:"rgba(255,107,129,0.3)",marginBottom:8,fontSize:"0.85rem"}}>{p}</pre>))}</div>)}
               </div>)}
             </section>
           )}

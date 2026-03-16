@@ -30,20 +30,35 @@ function parseError(body: unknown): string {
   return "Request failed";
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
-      ...(options?.headers || {}),
-    },
-    ...options,
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(parseError(body));
+async function request<T>(path: string, options?: RequestInit, timeoutMs = 120000): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
+        ...(options?.headers || {}),
+      },
+      ...options,
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(parseError(body));
+    }
+    return res.json();
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error("请求超时，请减少字数目标或关闭 SERP/网页知识库后重试");
+    }
+    if (e instanceof TypeError && (e.message === "Failed to fetch" || e.message.includes("network"))) {
+      throw new Error("网络请求失败，后端可能正在冷启动中（约30秒），请稍后重试");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json();
 }
 
 export const api = {
@@ -53,7 +68,7 @@ export const api = {
     request<GenerateResponse>("/api/v1/generate", {
       method: "POST",
       body: JSON.stringify(payload),
-    }),
+    }, 180000),
 
   analyzeSeo: (article: string, keywords: string) =>
     request<AnalyzeResponse>("/api/v1/analyze/seo", {
@@ -89,7 +104,7 @@ export const api = {
     request<OptimizeResponse>("/api/v1/optimize", {
       method: "POST",
       body: JSON.stringify(payload),
-    }),
+    }, 180000),
 
   optimizeExternal: (payload: {
     api_key: string;
@@ -103,7 +118,7 @@ export const api = {
     request<OptimizeResponse>("/api/v1/external/optimize", {
       method: "POST",
       body: JSON.stringify(payload),
-    }),
+    }, 180000),
 
   detectAi: (payload: {
     api_key: string;
