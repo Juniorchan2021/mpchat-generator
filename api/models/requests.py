@@ -15,7 +15,7 @@ class GenerateRequest(BaseModel):
     keywords: str
     selling_points: list[str] = []
     include_images: bool = True
-    image_count: int = 3
+    image_count: int = Field(default=3, ge=0, le=10)
     use_web: bool = False
     use_serp: bool = False
     geo_mode: bool = True
@@ -23,7 +23,7 @@ class GenerateRequest(BaseModel):
 
 
 class ArticleAnalyzeRequest(BaseModel):
-    article: str = Field(min_length=1)
+    article: str = Field(min_length=1, max_length=100000)
     keywords: str = ""
     faq_pairs: list[dict] = []
     target_url: str = ""
@@ -34,19 +34,19 @@ class OptimizeRequest(BaseModel):
     model: str = "gpt-4o"
     api_key: str = Field(min_length=1)
     base_url: str = ""
-    article: str = Field(min_length=1)
+    article: str = Field(min_length=1, max_length=100000)
     keywords: str = ""
     mode: Literal["seo", "geo", "dual", "triple", "humanize"] = "dual"
 
 
 class ExternalAnalyzeRequest(BaseModel):
-    article: str = Field(min_length=1)
+    article: str = Field(min_length=1, max_length=100000)
     keywords: str = ""
 
 
 class PublishRequest(BaseModel):
     title: str = Field(min_length=1)
-    article: str = Field(min_length=1)
+    article: str = Field(min_length=1, max_length=100000)
     meta_description: str = ""
     slug: str = ""
     tags: list[str] = []
@@ -80,7 +80,7 @@ class AiDetectRequest(BaseModel):
     model: str = "gpt-4o"
     api_key: str = Field(min_length=1)
     base_url: str = ""
-    article: str = Field(min_length=1)
+    article: str = Field(min_length=1, max_length=100000)
 
 
 class SerpAnalyzeRequest(BaseModel):
@@ -93,4 +93,4 @@ class ImageSearchRequest(BaseModel):
     scenario_terms: list[str] = []
     ai_terms: list[str] = []
     article_title: str = ""
-    per_query: int = 2
+    per_query: int = Field(default=2, ge=1, le=10)

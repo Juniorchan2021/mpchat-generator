@@ -305,11 +305,15 @@ def generate_article(
                 temperature=0.82, max_tokens=16384,
                 response_format={"type": "json_object"},
             )
-        except Exception:
-            response = client.chat.completions.create(
-                model=model, messages=messages,
-                temperature=0.82, max_tokens=16384,
-            )
+        except Exception as e:
+            err_msg = str(e).lower()
+            if any(k in err_msg for k in ("json_object", "response_format", "not support", "unsupported")):
+                response = client.chat.completions.create(
+                    model=model, messages=messages,
+                    temperature=0.82, max_tokens=16384,
+                )
+            else:
+                raise
         raw_text = response.choices[0].message.content.strip()
     else:
         raise ValueError("Either (provider + api_key) or client must be provided")
@@ -364,7 +368,9 @@ def parse_opt_result(raw: str) -> tuple[str, list[str]]:
         changelog_match = re.findall(r'"changelog"\s*:\s*\[(.*?)\]', cleaned, re.DOTALL)
         changelog = re.findall(r'"((?:[^"\\]|\\.)*)"', changelog_match[0]) if changelog_match else []
         return article, changelog
-    return cleaned, []
+    if cleaned.startswith("#") or "\n##" in cleaned or len(cleaned) > 200:
+        return cleaned, ["AI 返回了非 JSON 格式，已直接使用返回内容"]
+    raise ValueError("无法从 AI 响应中提取优化后的文章")
 
 
 def build_ai_detect_prompt(article: str) -> str:

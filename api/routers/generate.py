@@ -1,4 +1,6 @@
+import asyncio
 import os
+from functools import partial
 
 from fastapi import APIRouter, HTTPException
 
@@ -27,29 +29,32 @@ async def create_article(req: GenerateRequest):
     web_sources: list[dict] = []
     web_content = ""
     if req.use_web:
-        web_content, web_sources = fetch_web_knowledge()
+        web_content, web_sources = await asyncio.to_thread(fetch_web_knowledge)
 
     serp_data = None
     if req.use_serp and req.keywords.strip():
         primary_keyword = req.keywords.split(",")[0].strip()
-        serp_data = analyze_serp(primary_keyword)
+        serp_data = await asyncio.to_thread(analyze_serp, primary_keyword)
         web_content += "\n\n" + serp_to_prompt_context(serp_data)
 
-    result = generate_article(
-        model=req.model,
-        language=req.language,
-        scenario_label=req.scenario,
-        audience_tag=scenario.get("audience_tag", ""),
-        selling_points_text=selling_points_text(selected_points),
-        style_name=req.style,
-        style_instruction=style_instruction,
-        keywords=req.keywords,
-        web_content=web_content,
-        geo_mode=req.geo_mode,
-        word_count_target=req.word_count_target,
-        provider=req.provider,
-        api_key=req.api_key,
-        base_url=req.base_url,
+    result = await asyncio.to_thread(
+        partial(
+            generate_article,
+            model=req.model,
+            language=req.language,
+            scenario_label=req.scenario,
+            audience_tag=scenario.get("audience_tag", ""),
+            selling_points_text=selling_points_text(selected_points),
+            style_name=req.style,
+            style_instruction=style_instruction,
+            keywords=req.keywords,
+            web_content=web_content,
+            geo_mode=req.geo_mode,
+            word_count_target=req.word_count_target,
+            provider=req.provider,
+            api_key=req.api_key,
+            base_url=req.base_url,
+        )
     )
 
     title = result.get("seo_title", req.scenario)
@@ -58,14 +63,18 @@ async def create_article(req: GenerateRequest):
 
     images: list[dict] = []
     if req.include_images:
-        images = fetch_images_for_article(
-            pixabay_key=os.getenv("PIXABAY_API_KEY", "46561407-37c6214d0e52dffc32a430eb3"),
-            pexels_key=os.getenv("PEXELS_API_KEY", "YszqWzFI3WsjAq1gxox3BHOTfD3bOLlFmQZBoap418G6YYVaxhWC1HZz"),
-            scenario_terms=scenario.get("pixabay_terms", []),
-            ai_terms=result.get("image_search_terms", []),
-            article_title=title,
-            per_query=max(1, min(req.image_count, 3)),
-        )[: req.image_count]
+        fetched = await asyncio.to_thread(
+            partial(
+                fetch_images_for_article,
+                pixabay_key=os.getenv("PIXABAY_API_KEY", "46561407-37c6214d0e52dffc32a430eb3"),
+                pexels_key=os.getenv("PEXELS_API_KEY", "YszqWzFI3WsjAq1gxox3BHOTfD3bOLlFmQZBoap418G6YYVaxhWC1HZz"),
+                scenario_terms=scenario.get("pixabay_terms", []),
+                ai_terms=result.get("image_search_terms", []),
+                article_title=title,
+                per_query=max(1, min(req.image_count, 3)),
+            )
+        )
+        images = fetched[: req.image_count]
 
     return GenerateResponse(
         title=title,

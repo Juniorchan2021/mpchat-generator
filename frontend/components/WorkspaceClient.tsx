@@ -64,8 +64,10 @@ function downloadFile(content: string, filename: string, mime = "text/plain") {
   URL.revokeObjectURL(url);
 }
 
-function copyText(text: string) {
-  navigator.clipboard.writeText(text);
+
+
+function copyText(text: string, setCopy: (m: string) => void) {
+  navigator.clipboard.writeText(text).then(() => setCopy("已复制")).catch(() => setCopy("复制失败"));
 }
 
 function interleaveImages(markdown: string, images: Array<{ url: string; alt_text?: string; photographer?: string; source?: string }>): string {
@@ -107,12 +109,18 @@ export function WorkspaceClient() {
   const [isLoading, setIsLoading] = useState(false);
   const [optimizingMode, setOptimizingMode] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [copyMsg, setCopyMsg] = useState("");
 
   useEffect(() => {
     if (!error) return;
     const t = setTimeout(() => setError(""), 8000);
     return () => clearTimeout(t);
   }, [error]);
+  useEffect(() => {
+    if (!copyMsg) return;
+    const t = setTimeout(() => setCopyMsg(""), 2000);
+    return () => clearTimeout(t);
+  }, [copyMsg]);
   const [resultTab, setResultTab] = useState<ResultTab>("article");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [wordCountTarget, setWordCountTarget] = useState(1200);
@@ -138,7 +146,9 @@ export function WorkspaceClient() {
 
   useEffect(() => {
     let retried = false;
+    let cancelled = false;
     function applyConfig(data: ConfigData) {
+      if (cancelled) return;
       setConfig(data);
       const category = Object.keys(data.scenario_categories)[0] || "";
       const firstScenario = data.scenario_categories[category]?.[0];
@@ -174,6 +184,7 @@ export function WorkspaceClient() {
       });
     }
     loadConfig();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -229,7 +240,7 @@ export function WorkspaceClient() {
     });
   }
 
-  async function runAnalyses(nextResult: GenerateResponse, keywords: string) {
+  async function runAnalyses(nextResult: GenerateResponse, keywords: string, sellingPoints?: string[]) {
     const [seoResp, geoResp] = await Promise.all([
       api.analyzeSeo(nextResult.article, keywords),
       api.analyzeGeo(nextResult.article, keywords, nextResult.faq_pairs),
@@ -239,7 +250,7 @@ export function WorkspaceClient() {
     try {
       const [schemaResp, linksResp] = await Promise.all([
         api.getSchema({ title: nextResult.title, description: nextResult.meta_description, faq_pairs: nextResult.faq_pairs }),
-        api.getInternalLinks(form.selling_points),
+        api.getInternalLinks(sellingPoints ?? form.selling_points),
       ]);
       setSchemas(schemaResp);
       setInternalLinks(linksResp.links || []);
@@ -262,7 +273,7 @@ export function WorkspaceClient() {
     try { setIsLoading(true); setError(""); setChangelog([]); setAiDetect(null); setSchemas(null);
       const generated = await api.generate({ ...form, word_count_target: wordCountTarget });
       setResult(generated);
-      await runAnalyses(generated, form.keywords);
+      await runAnalyses(generated, form.keywords, form.selling_points);
     } catch (e) { setError(e instanceof Error ? e.message : t("err.requestFailed")); } finally { clearTimeout(warmupTimer); setShowWarmup(false); setIsLoading(false); }
   }
 
@@ -274,7 +285,7 @@ export function WorkspaceClient() {
       const optimized = await api.optimize({ provider: form.provider, api_key: form.api_key, model: form.model, base_url: form.base_url, article: result.article, keywords: form.keywords, mode });
       const nextResult = { ...result, article: optimized.optimized_article };
       setResult(nextResult); setChangelog(optimized.changelog);
-      await runAnalyses(nextResult, form.keywords);
+      await runAnalyses(nextResult, form.keywords, form.selling_points);
     } catch (e) {
       setError(e instanceof Error ? e.message : "优化失败，后端处理时间较长，请稍后重试");
     } finally { clearTimeout(warmupTimer); setShowWarmup(false); setIsLoading(false); setOptimizingMode(null); }
@@ -315,19 +326,23 @@ export function WorkspaceClient() {
     if (batchScenarios.length === 0 || !form.api_key.trim()) return;
     try { setIsLoading(true); setError(""); setBatchResults([]); setBatchProgress(0); setBatchTotal(batchScenarios.length);
       const results: typeof batchResults = [];
+      const failed: string[] = [];
       for (let i = 0; i < batchScenarios.length; i++) {
         const scenarioLabel = batchScenarios[i];
         const found = allScenarios.find((s) => s.label === scenarioLabel);
-        if (!found) continue;
+        if (!found) { failed.push(scenarioLabel); continue; }
         setBatchProgress(i + 1);
         try {
           const generated = await api.generate({ ...form, category: found.category, scenario: scenarioLabel, keywords: found.keywords || form.keywords, selling_points: found.selling_points || [] });
           const [seoR, geoR] = await Promise.all([ api.analyzeSeo(generated.article, found.keywords || form.keywords), api.analyzeGeo(generated.article, found.keywords || form.keywords, generated.faq_pairs) ]);
           results.push({ scenario: scenarioLabel, result: generated, seoScore: seoR.score, geoScore: geoR.score });
           pushHistory({ id: crypto.randomUUID(), createdAt: new Date().toISOString(), scenario: scenarioLabel, keywords: found.keywords || form.keywords, result: generated, seoScore: seoR.score, geoScore: geoR.score });
-        } catch { /* skip */ }
+        } catch { failed.push(scenarioLabel); }
       }
       setBatchResults(results);
+      if (failed.length > 0) {
+        setError(`${results.length} 个场景成功，${failed.length} 个失败: ${failed.join(", ")}`);
+      }
     } catch (e) { setError(e instanceof Error ? e.message : "批量生成失败"); } finally { setIsLoading(false); }
   }, [batchScenarios, form, allScenarios]);
 
@@ -445,6 +460,7 @@ export function WorkspaceClient() {
 
       {configOffline && <div className="error-banner" style={{background:"rgba(255,165,0,0.15)",borderColor:"rgba(255,165,0,0.4)",color:"#ffaa33"}}>使用离线配置，部分场景数据可能不完整。后端连接恢复后请刷新页面。</div>}
       {error ? <div className="error-banner toast-error" onClick={() => setError("")}><span>{error}</span><span style={{cursor:"pointer",marginLeft:12,opacity:0.6}}>✕</span></div> : null}
+      {copyMsg && <div className="error-banner toast-error" style={{background:"rgba(34,197,94,0.15)",borderColor:"rgba(34,197,94,0.3)",color:"#4ade80"}}>{copyMsg}</div>}
 
       {showWarmup && (
         <div className="warmup-banner">
@@ -457,7 +473,7 @@ export function WorkspaceClient() {
         <section className="glass-card">
           <div className="section-header"><h2>批量结果 ({batchResults.length})</h2><button className="secondary-button" onClick={downloadBatchAll}>全部下载 (Markdown)</button></div>
           <div className="stack-column">{batchResults.map((b, i) => (
-            <div key={i} className="glass-card" style={{background:"rgba(255,255,255,0.02)"}}>
+            <div key={b.scenario} className="glass-card" style={{background:"rgba(255,255,255,0.02)"}}>
               <div className="section-header"><div><h3>{b.result.title}</h3><p className="muted-text">{b.scenario}</p></div>
                 <div className="score-strip"><div className="score-card"><span>SEO</span><strong>{b.seoScore}</strong></div><div className="score-card"><span>GEO</span><strong>{b.geoScore}</strong></div></div>
               </div>
@@ -494,8 +510,8 @@ export function WorkspaceClient() {
             <section className="results-grid">
               <article className="glass-card">
                 <div className="section-header"><div><h2>{result.title}</h2><p>{result.meta_description}</p></div><span className="slug-chip">/{result.slug}</span></div>
-                <div className="pill-row">{result.ab_titles.map((t) => (<button className="pill preset-chip" key={t} onClick={() => handleAdoptTitle(t)} title="点击采用此标题">{t}</button>))}</div>
-                <div className="article-card rendered-article"><ReactMarkdown remarkPlugins={[remarkGfm]}>{interleaveImages(result.article, result.images)}</ReactMarkdown></div>
+                <div className="pill-row">{(result.ab_titles ?? []).map((t) => (<button className="pill preset-chip" key={t} onClick={() => handleAdoptTitle(t)} title="点击采用此标题">{t}</button>))}</div>
+                <div className="article-card rendered-article"><ReactMarkdown remarkPlugins={[remarkGfm]}>{interleaveImages(result.article, result.images ?? [])}</ReactMarkdown></div>
               </article>
               <aside className="stack-column">
                 <div className="glass-card">
@@ -506,14 +522,14 @@ export function WorkspaceClient() {
                 </div>
                 <div className="glass-card">
                   <h3>图片与提示词</h3>
-                  <div className="image-grid">{result.images.map((img) => (
+                  <div className="image-grid">{(result.images ?? []).map((img) => (
                     <div key={img.url} style={{position:"relative"}}><Image src={img.url} alt={img.alt_text || result.title} className="preview-image" width={640} height={480} unoptimized />
                       {img.photographer && (<span style={{fontSize:"0.7rem",color:"var(--muted)",display:"block",marginTop:2}}>{img.photographer} ({img.source})</span>)}
                     </div>
                   ))}</div>
-                  {result.image_prompts.length > 0 && (<><h4>AI 图片提示词</h4><ul className="plain-list">{result.image_prompts.map((ip) => (<li key={ip.prompt}><strong>{ip.scene}</strong><p style={{margin:"4px 0 0",color:"var(--muted)",fontSize:"0.85rem"}}>{ip.prompt}</p></li>))}</ul></>)}
+                  {(result.image_prompts ?? []).length > 0 && (<><h4>AI 图片提示词</h4><ul className="plain-list">{(result.image_prompts ?? []).map((ip) => (<li key={ip.prompt}><strong>{ip.scene}</strong><p style={{margin:"4px 0 0",color:"var(--muted)",fontSize:"0.85rem"}}>{ip.prompt}</p></li>))}</ul></>)}
                 </div>
-                <div className="glass-card"><h3>FAQ</h3><ul className="plain-list">{result.faq_pairs.map((f) => (<li key={f.q}><strong>{f.q}</strong><p>{f.a}</p></li>))}</ul></div>
+                <div className="glass-card"><h3>FAQ</h3><ul className="plain-list">{(result.faq_pairs ?? []).map((f) => (<li key={f.q}><strong>{f.q}</strong><p>{f.a}</p></li>))}</ul></div>
               </aside>
             </section>
           )}
@@ -533,8 +549,8 @@ export function WorkspaceClient() {
               {keywordDensity.length > 0 && (<div style={{marginTop:20}}><h3>关键词密度</h3><table className="kw-table"><thead><tr><th>关键词</th><th>密度</th></tr></thead><tbody>{keywordDensity.map((kd) => (<tr key={kd.keyword}><td>{kd.keyword}</td><td>{typeof kd.density === "number" ? kd.density.toFixed(2) : "0.00"}%</td></tr>))}</tbody></table></div>)}
               {result.serp && (<div style={{marginTop:20}}><h3>SERP 分析结果</h3><pre className="article-card" style={{maxHeight:300,overflow:"auto"}}>{JSON.stringify(result.serp, null, 2)}</pre></div>)}
               {schemas && (<div style={{marginTop:20}}><h3>JSON-LD Schema</h3><div className="seo-geo-grid">
-                <div><h4>Article Schema</h4><pre className="article-card" style={{fontSize:"0.8rem",maxHeight:260,overflow:"auto"}}>{JSON.stringify(schemas.article_schema, null, 2)}</pre><button className="secondary-button" style={{marginTop:6}} onClick={() => copyText(JSON.stringify(schemas.article_schema, null, 2))}>复制</button></div>
-                <div><h4>FAQPage Schema</h4><pre className="article-card" style={{fontSize:"0.8rem",maxHeight:260,overflow:"auto"}}>{JSON.stringify(schemas.faq_schema, null, 2)}</pre><button className="secondary-button" style={{marginTop:6}} onClick={() => copyText(JSON.stringify(schemas.faq_schema, null, 2))}>复制</button></div>
+                <div><h4>Article Schema</h4><pre className="article-card" style={{fontSize:"0.8rem",maxHeight:260,overflow:"auto"}}>{JSON.stringify(schemas.article_schema, null, 2)}</pre><button className="secondary-button" style={{marginTop:6}} onClick={() => copyText(JSON.stringify(schemas.article_schema, null, 2), setCopyMsg)}>复制</button></div>
+                <div><h4>FAQPage Schema</h4><pre className="article-card" style={{fontSize:"0.8rem",maxHeight:260,overflow:"auto"}}>{JSON.stringify(schemas.faq_schema, null, 2)}</pre><button className="secondary-button" style={{marginTop:6}} onClick={() => copyText(JSON.stringify(schemas.faq_schema, null, 2), setCopyMsg)}>复制</button></div>
               </div></div>)}
               {internalLinks.length > 0 && (<div style={{marginTop:20}}><h3>推荐内部链接</h3><ul className="plain-list">{internalLinks.map((l) => (<li key={l.url}><a href={l.url} target="_blank" rel="noreferrer" style={{color:"var(--primary)"}}>{l.text}</a></li>))}</ul></div>)}
               <div style={{marginTop:20}}><h3>优化建议</h3><ul className="plain-list">{(seo?.suggestions || []).concat(geo?.suggestions || []).map((s) => (<li key={s}>{s}</li>))}</ul></div>
@@ -551,11 +567,11 @@ export function WorkspaceClient() {
                   <button className="secondary-button" onClick={() => downloadFile(result.article.replace(/<[^>]*>/g, ""), `${result.slug}.txt`, "text/plain")}>纯文本 (.txt)</button>
                 </div></div>
                 <div className="export-card"><h4>复制内容</h4><div className="action-row">
-                  <button className="secondary-button" onClick={() => copyText(result.article)}>复制 Markdown 源码</button>
-                  <button className="secondary-button" onClick={() => copyText(`Title: ${result.title}\nDescription: ${result.meta_description}\nSlug: ${result.slug}\nKeywords: ${form.keywords}`)}>复制 SEO 元数据</button>
-                  <button className="secondary-button" onClick={() => copyText(result.image_prompts.map((p) => `[${p.scene}] ${p.prompt}`).join("\n"))}>复制图片提示词</button>
+                  <button className="secondary-button" onClick={() => copyText(result.article, setCopyMsg)}>复制 Markdown 源码</button>
+                  <button className="secondary-button" onClick={() => copyText(`Title: ${result.title}\nDescription: ${result.meta_description}\nSlug: ${result.slug}\nKeywords: ${form.keywords}`, setCopyMsg)}>复制 SEO 元数据</button>
+                  <button className="secondary-button" onClick={() => copyText((result.image_prompts ?? []).map((p) => `[${p.scene}] ${p.prompt}`).join("\n"), setCopyMsg)}>复制图片提示词</button>
                 </div></div>
-                <div className="export-card"><h4>AI 图片提示词</h4>{result.image_prompts.length > 0 ? (<ul className="plain-list">{result.image_prompts.map((ip) => (<li key={ip.prompt}><strong>{ip.scene}</strong>: {ip.prompt}</li>))}</ul>) : (<p className="muted-text">无图片提示词</p>)}</div>
+                <div className="export-card"><h4>AI 图片提示词</h4>{(result.image_prompts ?? []).length > 0 ? (<ul className="plain-list">{(result.image_prompts ?? []).map((ip) => (<li key={ip.prompt}><strong>{ip.scene}</strong>: {ip.prompt}</li>))}</ul>) : (<p className="muted-text">无图片提示词</p>)}</div>
               </div>
             </section>
           )}
@@ -575,7 +591,7 @@ export function WorkspaceClient() {
                   <div className="section-header" style={{marginBottom:8}}><strong>{p.label}</strong>
                     <button className="secondary-button" onClick={() => handlePublish(p.id)} disabled={isLoading || pr?.status === "loading"} style={{padding:"6px 12px",fontSize:"0.82rem"}}>{pr?.status === "loading" ? "..." : p.needsKey ? "发布" : "生成预览"}</button>
                   </div>
-                  {pr?.status === "done" && pr.data?.preview && (<div><pre className="article-card" style={{maxHeight:160,overflow:"auto",fontSize:"0.78rem"}}>{pr.data.preview}</pre><button className="secondary-button" style={{marginTop:6,padding:"4px 10px",fontSize:"0.78rem"}} onClick={() => copyText(pr.data?.preview || "")}>复制</button></div>)}
+                  {pr?.status === "done" && pr.data?.preview && (<div><pre className="article-card" style={{maxHeight:160,overflow:"auto",fontSize:"0.78rem"}}>{pr.data.preview}</pre><button className="secondary-button" style={{marginTop:6,padding:"4px 10px",fontSize:"0.78rem"}} onClick={() => copyText(pr.data?.preview || "", setCopyMsg)}>复制</button></div>)}
                   {pr?.status === "done" && pr.data?.url && (<a href={pr.data.url as string} target="_blank" rel="noreferrer" style={{color:"var(--primary)",fontSize:"0.82rem"}}>查看文章</a>)}
                   {pr?.status === "error" && (<p style={{color:"var(--danger)",fontSize:"0.82rem"}}>{pr.data?.preview || "发布失败"}</p>)}
                 </div>);

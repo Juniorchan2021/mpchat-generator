@@ -1,3 +1,5 @@
+from fastapi import HTTPException
+
 from core.generation import (
     build_ai_detect_prompt,
     build_seo_optimize_prompt,
@@ -30,10 +32,10 @@ def optimize_article_content(
     base_url: str = "",
     provider: str = "",
 ) -> dict:
-    seo_before = reading_stats(article, keywords).get("structure_score", 0)
-    geo_before = geo_score(article, [])["score"]
     seo_stats = reading_stats(article, keywords)
     geo_result = geo_score(article, [])
+    seo_before = seo_stats.get("structure_score", 0)
+    geo_before = geo_result["score"]
 
     if mode == "seo":
         prompt = build_seo_optimize_prompt(article, keywords, [])
@@ -64,16 +66,23 @@ def optimize_article_content(
         {"role": "system", "content": system_message},
         {"role": "user", "content": prompt},
     ]
-    if provider:
-        raw = call_llm(provider=provider, api_key=api_key, base_url=base_url,
-                        model=model, messages=messages, max_tokens=16000, temperature=0.6)
-    else:
-        client = get_client(api_key, base_url)
-        response = client.chat.completions.create(
-            model=model, messages=messages, temperature=0.6, max_tokens=16000,
-        )
-        raw = response.choices[0].message.content.strip()
+    try:
+        if provider:
+            raw = call_llm(provider=provider, api_key=api_key, base_url=base_url,
+                            model=model, messages=messages, max_tokens=16000, temperature=0.6)
+        else:
+            client = get_client(api_key, base_url)
+            response = client.chat.completions.create(
+                model=model, messages=messages, temperature=0.6, max_tokens=16000,
+            )
+            raw = response.choices[0].message.content.strip()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI 服务调用失败: {type(e).__name__}: {e}")
+
     optimized_article, changelog = parse_opt_result(raw)
+    if not optimized_article or optimized_article == raw:
+        raise HTTPException(status_code=502, detail="AI 返回格式异常，优化失败，请重试")
+
     seo_after = reading_stats(optimized_article, keywords).get("structure_score", 0)
     geo_after = geo_score(optimized_article, [])["score"]
     return {
@@ -91,12 +100,15 @@ def detect_ai_content(article: str, api_key: str, model: str, base_url: str = ""
         {"role": "system", "content": "你是 AI 内容检测专家，擅长分析文本是否由 AI 生成。"},
         {"role": "user", "content": build_ai_detect_prompt(article)},
     ]
-    if provider:
-        return call_llm(provider=provider, api_key=api_key, base_url=base_url,
-                         model=model, messages=messages, max_tokens=2000, temperature=0.3)
-    else:
-        client = get_client(api_key, base_url)
-        response = client.chat.completions.create(
-            model=model, messages=messages, temperature=0.3, max_tokens=2000,
-        )
-        return response.choices[0].message.content.strip()
+    try:
+        if provider:
+            return call_llm(provider=provider, api_key=api_key, base_url=base_url,
+                             model=model, messages=messages, max_tokens=2000, temperature=0.3)
+        else:
+            client = get_client(api_key, base_url)
+            response = client.chat.completions.create(
+                model=model, messages=messages, temperature=0.3, max_tokens=2000,
+            )
+            return response.choices[0].message.content.strip()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI 检测服务调用失败: {type(e).__name__}: {e}")
