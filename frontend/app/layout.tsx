@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import ClientProviders from "@/components/ClientProviders";
+import HeaderClient from "@/components/HeaderClient";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MPChat v5",
-  description: "MPChat Apple HIG frontend powered by Next.js + FastAPI",
+  title: "MPChat Content OS",
+  description: "MPChat intelligent content generation platform",
 };
 
 export default function RootLayout({
@@ -28,20 +29,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <div className="app-shell">
-          <header className="topbar">
-            <div>
-              <span className="eyebrow">MPChat</span>
-              <strong className="brand-title">Content Operating System</strong>
-            </div>
-            <nav className="nav-pills">
-              <Link href="/">工作台</Link>
-              <Link href="/external">外部文章</Link>
-              <Link href="/history">历史</Link>
-            </nav>
-          </header>
-          {children}
-        </div>
+        <ClientProviders>
+          <div className="app-shell">
+            <HeaderClient />
+            {children}
+          </div>
+        </ClientProviders>
       </body>
     </html>
   );

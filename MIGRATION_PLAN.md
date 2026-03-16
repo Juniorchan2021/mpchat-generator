@@ -221,8 +221,19 @@ graph LR
 
 ### 4.3 环境变量汇总
 
-- **后端**：现有 `.env` 中的所有 Key（OpenAI/Gemini、Pixabay、Pexels、Dev.to、Hashnode、SERP 等）。
-- **前端**：`NEXT_PUBLIC_API_URL`（必填），其余按需（如 analytics）。
+**后端（Render Dashboard 配置）：**
+- `PIXABAY_API_KEY` — Pixabay 图片搜索（推荐）
+- `PEXELS_API_KEY` — Pexels 图片搜索（推荐）
+- `MPCHAT_API_KEY` — API 认证密钥（可选，未设则跳过校验）
+- `CORS_ALLOW_ORIGINS` — 允许的前端域名（可选）
+- 其他发布平台 Key（Dev.to、Hashnode 等按需配置）
+
+**前端（Cloudflare Pages Environment Variables 配置）：**
+- `NEXT_PUBLIC_API_URL` — 后端 API 地址（必填，如 `https://mpchat-api.onrender.com`）
+- `NEXT_PUBLIC_API_KEY` — 对应后端 `MPCHAT_API_KEY`
+- `NEXT_PUBLIC_DEFAULT_GEMINI_KEY` — 默认 Gemini API Key（v5.1 新增，构建时注入）
+- `NEXT_PUBLIC_DEFAULT_PEXELS_KEY` — 默认 Pexels Key（v5.1 新增）
+- `NEXT_PUBLIC_DEFAULT_PIXABAY_KEY` — 默认 Pixabay Key（v5.1 新增）
 
 ---
 
@@ -361,4 +372,51 @@ es.onmessage = (e) => {
 | **CORS 配置错误** | 前端请求被浏览器拦截 | FastAPI 明确配置 `allow_origins`，开发时包含 `localhost:3000`，生产时包含 `*.pages.dev` 和自定义域名 |
 | **LLM 响应不稳定** | 返回非 JSON、截断、格式异常 | 后端做多策略兜底解析（直接 JSON → 修复尾逗号 → 正则提取 → 纯文本降级），与 v4.x `_parse_opt_result` 逻辑一致 |
 
-完成上述步骤后，MPChat 将以前后端分离方式运行，前端 UI/UX 不再受 Streamlit 限制，并可免费部署在 Cloudflare Pages。
+---
+
+## 9. v5.1 部署更新事项
+
+### 9.1 Render 后端新增环境变量
+
+v5.1 新增 `anthropic` 依赖，需确保后端构建时安装成功。在 Render Dashboard 中新增：
+
+| 变量 | 值 | 说明 |
+|------|---|------|
+| `PIXABAY_API_KEY` | `46561407-...` | 图片搜索主图源 |
+| `PEXELS_API_KEY` | `YszqWzFI...` | 图片搜索补充图源 |
+
+### 9.2 Cloudflare Pages 新增环境变量
+
+在 Cloudflare Pages 项目设置中新增：
+
+| 变量 | 值 | 说明 |
+|------|---|------|
+| `NEXT_PUBLIC_DEFAULT_GEMINI_KEY` | `AIzaSy...` | 默认 Gemini Key |
+| `NEXT_PUBLIC_DEFAULT_PEXELS_KEY` | `YszqWz...` | 默认 Pexels Key |
+| `NEXT_PUBLIC_DEFAULT_PIXABAY_KEY` | `465614...` | 默认 Pixabay Key |
+
+### 9.3 构建流程变化
+
+前端构建命令不变：`cd frontend && npm ci && npm run build`
+后端启动命令不变：`uvicorn api.main:app --host 0.0.0.0 --port $PORT`
+
+新增依赖：`requirements.txt` 中加入 `anthropic>=0.40.0`
+
+### 9.4 部署验证清单
+
+| # | 验证项目 | 方法 | 预期结果 |
+|---|---------|------|----------|
+| 1 | 后端 health | `curl https://mpchat-api.onrender.com/api/v1/health` | `{"status":"ok"}` |
+| 2 | 前端首页 | 打开 Cloudflare Pages URL | 页面正常显示，Logo 可见 |
+| 3 | 默认 Key | 不输入 Key，直接点生成 | 使用 Gemini 默认 Key 生成成功 |
+| 4 | Provider 切换 | 选择 Anthropic Claude | API Key 清空，提示输入 |
+| 5 | 语言切换 | 点击 "EN" 按钮 | UI 文案全部变英文 |
+| 6 | 跨页面配置 | 工作台设好 Key → 切到外部文章页 | 配置条显示工作台的配置 |
+| 7 | 冷启动提示 | 等后端休眠后首次生成 | 5 秒后显示唤醒提示 |
+| 8 | 场景列表 | 展开场景下拉 | 能看到 60+ 细分场景（AI 工具、流媒体等） |
+| 9 | 字数控制 | 设定 2000 字，生成 | 文章字数接近 2000 |
+| 10 | 图片加载 | 开启配图，生成文章 | 文内和 Module C 正常显示图片 |
+
+---
+
+完成上述步骤后，MPChat v5.1 将具备 11 家 AI 服务商、60+ 细分场景、中英文双语 UI、默认 Key 零配置启动等增强能力，前端 UI/UX 不再受 Streamlit 限制，并可免费部署在 Cloudflare Pages。

@@ -1,6 +1,7 @@
 from core.generation import (
     build_ai_detect_prompt,
     build_seo_optimize_prompt,
+    call_llm,
     get_client,
     parse_opt_result,
 )
@@ -27,6 +28,7 @@ def optimize_article_content(
     api_key: str,
     model: str,
     base_url: str = "",
+    provider: str = "",
 ) -> dict:
     seo_before = reading_stats(article, keywords).get("structure_score", 0)
     geo_before = geo_score(article, [])["score"]
@@ -58,17 +60,20 @@ def optimize_article_content(
         prompt += JSON_OPT_INSTRUCTION
         system_message = "你是 SEO + GEO 联合优化专家。请严格输出 JSON。"
 
-    client = get_client(api_key, base_url)
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": prompt},
-        ],
-        temperature=0.6,
-        max_tokens=16000,
-    )
-    optimized_article, changelog = parse_opt_result(response.choices[0].message.content.strip())
+    messages = [
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": prompt},
+    ]
+    if provider:
+        raw = call_llm(provider=provider, api_key=api_key, base_url=base_url,
+                        model=model, messages=messages, max_tokens=16000, temperature=0.6)
+    else:
+        client = get_client(api_key, base_url)
+        response = client.chat.completions.create(
+            model=model, messages=messages, temperature=0.6, max_tokens=16000,
+        )
+        raw = response.choices[0].message.content.strip()
+    optimized_article, changelog = parse_opt_result(raw)
     seo_after = reading_stats(optimized_article, keywords).get("structure_score", 0)
     geo_after = geo_score(optimized_article, [])["score"]
     return {
@@ -81,15 +86,17 @@ def optimize_article_content(
     }
 
 
-def detect_ai_content(article: str, api_key: str, model: str, base_url: str = "") -> str:
-    client = get_client(api_key, base_url)
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": "你是 AI 内容检测专家，擅长分析文本是否由 AI 生成。"},
-            {"role": "user", "content": build_ai_detect_prompt(article)},
-        ],
-        temperature=0.3,
-        max_tokens=2000,
-    )
-    return response.choices[0].message.content.strip()
+def detect_ai_content(article: str, api_key: str, model: str, base_url: str = "", provider: str = "") -> str:
+    messages = [
+        {"role": "system", "content": "你是 AI 内容检测专家，擅长分析文本是否由 AI 生成。"},
+        {"role": "user", "content": build_ai_detect_prompt(article)},
+    ]
+    if provider:
+        return call_llm(provider=provider, api_key=api_key, base_url=base_url,
+                         model=model, messages=messages, max_tokens=2000, temperature=0.3)
+    else:
+        client = get_client(api_key, base_url)
+        response = client.chat.completions.create(
+            model=model, messages=messages, temperature=0.3, max_tokens=2000,
+        )
+        return response.choices[0].message.content.strip()

@@ -5,6 +5,7 @@ export interface Provider {
   models: string[];
   key_prefix: string;
   get_key_url: string;
+  sdk?: string;
 }
 
 export interface ConfigData {
@@ -41,6 +42,7 @@ export interface GenerateRequest {
   use_web: boolean;
   use_serp: boolean;
   geo_mode: boolean;
+  word_count_target?: number;
 }
 
 export interface GenerateResponse {
@@ -55,6 +57,8 @@ export interface GenerateResponse {
   image_search_terms: string[];
   word_count: number;
   reading_time_min: number;
+  web_sources?: Array<{ url: string; title?: string }>;
+  serp?: Record<string, unknown> | null;
 }
 
 export interface AnalyzeResponse {
@@ -81,4 +85,32 @@ export interface HistoryItem {
   result: GenerateResponse;
   seoScore: number;
   geoScore: number;
+}
+
+export interface AiDetectResult {
+  score: number;
+  traces: string[];
+  high_risk_paragraphs: string[];
+  summary: string;
+}
+
+export interface PublishPayload {
+  title: string;
+  article: string;
+  meta_description?: string;
+  slug?: string;
+  tags?: string[];
+  canonical_url?: string;
+  published?: boolean;
+  api_key?: string;
+  token?: string;
+  publication_id?: string;
+}
+
+export interface PublishResponse {
+  ok?: boolean;
+  preview?: string;
+  url?: string;
+  id?: string | number;
+  [key: string]: unknown;
 }

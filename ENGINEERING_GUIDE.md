@@ -338,8 +338,11 @@ export function ScoreRing({ score, size = "md", label }: ScoreRingProps) {
 |--------|------|------|--------|
 | `NEXT_PUBLIC_API_URL` | 后端 API 基地址 | 是 | `http://localhost:8000` |
 | `NEXT_PUBLIC_API_KEY` | 后端认证密钥（对应后端 `MPCHAT_API_KEY`） | 否（本地开发可不配） | - |
+| `NEXT_PUBLIC_DEFAULT_GEMINI_KEY` | 默认 Gemini API Key（v5.1 新增） | 推荐 | - |
+| `NEXT_PUBLIC_DEFAULT_PEXELS_KEY` | 默认 Pexels Key（前端展示用） | 否 | - |
+| `NEXT_PUBLIC_DEFAULT_PIXABAY_KEY` | 默认 Pixabay Key（前端展示用） | 否 | - |
 
-> `NEXT_PUBLIC_` 前缀的变量会被打包到客户端代码中，仅放不敏感信息。
+> `NEXT_PUBLIC_` 前缀的变量会被打包到客户端代码中。虽然 Key 会出现在 JS 包中，但由于前端部署在 Cloudflare Pages（私有 URL），且本工具仅供内部团队使用，风险可控。源码仓库中不出现明文，通过 Cloudflare Pages Environment Variables 注入。
 
 ---
 
@@ -717,3 +720,225 @@ jobs:
         with: { node-version: "18" }
       - run: cd frontend && npm ci && npm test
 ```
+
+
+---
+
+## 9. Anthropic Claude 适配层（v5.1 新增）
+
+### 9.1 问题
+
+后端统一使用 `openai` Python SDK 调用 LLM。Anthropic (Claude) 的 API 使用不同的请求格式（`x-api-key` header、`anthropic-version` header、不同的 `messages` 结构），无法直接使用 OpenAI SDK。
+
+### 9.2 双通道方案
+
+Claude 同时支持两种调用路径：
+
+**路径 A — OpenRouter 中转（已支持）**：用户选择 OpenRouter 作为 Provider，使用 Claude 模型名（如 `anthropic/claude-sonnet-4`），无需额外适配。
+
+**路径 B — 原生 Anthropic SDK（v5.1 新增）**：用户选择 Anthropic 作为 Provider，使用 `anthropic` Python SDK 直连。
+
+### 9.3 实现
+
+在 `core/generation.py` 中添加统一调用入口：
+
+```python
+def call_llm(provider: str, api_key: str, base_url: str,
+             model: str, messages: list, max_tokens: int = 16384) -> str:
+    if provider == "anthropic":
+        from anthropic import Anthropic
+        client = Anthropic(api_key=api_key)
+        # Anthropic 要求 system 和 user 分开
+        system_msg = ""
+        user_msgs = []
+        for m in messages:
+            if m["role"] == "system":
+                system_msg = m["content"]
+            else:
+                user_msgs.append(m)
+        resp = client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            system=system_msg,
+            messages=user_msgs,
+        )
+        return resp.content[0].text
+    else:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key, base_url=base_url or None)
+        resp = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=0.7,
+        )
+        return resp.choices[0].message.content
+```
+
+### 9.4 影响范围
+
+所有直接调用 `client.chat.completions.create()` 的位置需改为调用 `call_llm()`。
+
+### 9.5 依赖
+
+`requirements.txt` 新增：`anthropic>=0.40.0`
+
+---
+
+## 10. 国际化 (i18n) 架构（v5.1 新增）
+
+### 10.1 技术选型
+
+- **方案**：React Context + JSON 翻译文件
+- **原因**：`output: "export"` 静态导出不支持 Next.js i18n 中间件
+- **不引入第三方库**（如 react-i18next），保持轻量
+
+### 10.2 文件结构
+
+```
+frontend/lib/i18n/
+├── index.tsx   # I18nProvider + useI18n hook
+├── zh.json     # 中文翻译（80+ key）
+└── en.json     # 英文翻译（80+ key）
+```
+
+### 10.3 核心实现
+
+```typescript
+// frontend/lib/i18n/index.tsx
+"use client";
+import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import zh from "./zh.json";
+import en from "./en.json";
+
+type Locale = "zh" | "en";
+const dictionaries = { zh, en } as const;
+
+interface I18nCtx {
+  locale: Locale;
+  setLocale: (l: Locale) => void;
+  t: (key: string) => string;
+}
+
+const I18nContext = createContext<I18nCtx>({
+  locale: "zh", setLocale: () => {}, t: (k) => k,
+});
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [locale, setLocaleState] = useState<Locale>(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("mpchat-locale") as Locale) || "zh";
+    }
+    return "zh";
+  });
+
+  const setLocale = useCallback((l: Locale) => {
+    setLocaleState(l);
+    localStorage.setItem("mpchat-locale", l);
+  }, []);
+
+  const t = useCallback(
+    (key: string) => (dictionaries[locale] as Record<string, string>)[key] ?? key,
+    [locale]
+  );
+
+  return (
+    <I18nContext.Provider value={{ locale, setLocale, t }}>
+      {children}
+    </I18nContext.Provider>
+  );
+}
+
+export const useI18n = () => useContext(I18nContext);
+```
+
+### 10.4 翻译 Key 命名规则
+
+`{area}.{element}` 格式：
+
+| 前缀 | 含义 | 示例 |
+|------|------|------|
+| `nav.*` | 导航栏 | `nav.workspace`, `nav.external`, `nav.history` |
+| `btn.*` | 按钮 | `btn.generate`, `btn.analyze`, `btn.copy` |
+| `tab.*` | Tab 标签 | `tab.article`, `tab.seoGeo`, `tab.export` |
+| `form.*` | 表单标签 | `form.provider`, `form.model`, `form.keywords` |
+| `msg.*` | 提示消息 | `msg.serverWarmup`, `msg.generateSuccess` |
+| `empty.*` | 空状态 | `empty.history`, `empty.article` |
+| `err.*` | 错误 | `err.requestFailed`, `err.invalidKey` |
+
+### 10.5 使用方式
+
+```typescript
+const { t, locale, setLocale } = useI18n();
+
+// 翻译文案
+<button>{t("btn.generate")}</button>
+
+// 语言切换
+<button onClick={() => setLocale(locale === "zh" ? "en" : "zh")}>
+  {locale === "zh" ? "EN" : "中"}
+</button>
+```
+
+---
+
+## 11. localStorage 约定（v5.1 新增）
+
+| Key | 用途 | 格式 | 清理策略 |
+|-----|------|------|----------|
+| `mpchat-ai-config` | AI 配置（跨页面共享） | `{ provider, model, api_key, base_url }` | 不自动清理 |
+| `mpchat-locale` | 语言偏好 | `"zh"` 或 `"en"` | 不自动清理 |
+| `mpchat-history` | 生成历史记录 | 数组，最多 50 条 | 超过 50 条时 FIFO 淘汰 |
+| `mpchat-load-workspace` | 从历史加载到工作台 | 临时数据 | 读取后立即删除 |
+
+### aiConfig.ts 工具模块
+
+```typescript
+// frontend/lib/aiConfig.ts
+const STORAGE_KEY = "mpchat-ai-config";
+
+export interface AiConfig {
+  provider: string;
+  model: string;
+  api_key: string;
+  base_url: string;
+}
+
+export function loadAiConfig(): AiConfig | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(STORAGE_KEY);
+  return raw ? JSON.parse(raw) : null;
+}
+
+export function saveAiConfig(config: AiConfig): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+}
+```
+
+---
+
+## 12. 字数目标全链路（v5.1 新增）
+
+前端到后端到 Prompt 的完整数据流：
+
+```
+用户拖动滑块 (wordCountTarget: 1500)
+       │
+WorkspaceClient 调用 api.generate({ ...form, word_count_target: 1500 })
+       │
+POST /api/v1/generate  →  req.word_count_target = 1500
+       │
+generate_article(word_count_target=1500)
+       │
+Prompt: "文章总字数控制在 1500 字左右"
+```
+
+**涉及文件：**
+
+| 文件 | 改动 |
+|------|------|
+| `frontend/lib/types.ts` | `GenerateRequest` 增加 `word_count_target?: number` |
+| `frontend/components/WorkspaceClient.tsx` | generate 调用时传入 `word_count_target` |
+| `api/models/requests.py` | `GenerateRequest` 增加 `word_count_target: int = 1200` |
+| `api/routers/generate.py` | 将 `req.word_count_target` 传入 `generate_article()` |
+| `core/generation.py` | Prompt 中使用 `f"文章总字数控制在 {word_count_target} 字左右"` |

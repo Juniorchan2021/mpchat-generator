@@ -27,3 +27,10 @@ build/
 
 # Streamlit 本地缓存
 .streamlit/secrets.toml
+
+# v5 additions
+.env.local
+frontend/.env.local
+frontend/out/
+frontend/.next/
+node_modules/

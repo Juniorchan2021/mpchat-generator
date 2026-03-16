@@ -1154,3 +1154,153 @@ SVG 实现的圆环进度指示器，核心视觉元素：
 ### 10.4 动效偏好
 
 遵循 `prefers-reduced-motion: reduce`，禁用所有非必要动画（见 §7.4）。
+
+
+---
+
+## 11. v5.1 品牌与 Logo 规范
+
+### 11.1 Logo 规格
+
+- **来源**：mp.net 官网（`https://mp.net/Logo.png`）
+- **导航栏尺寸**：高度 32px，等比缩放
+- **Favicon**：16x16 和 32x32，保存为 `frontend/app/favicon.ico`
+- **文件位置**：`frontend/public/mpchat-logo.svg`（或 .png）
+
+### 11.2 品牌文字
+
+- 主标题：**MPChat**（加粗，`--text-primary`）
+- 副标题：**Content OS**（常规字重，`--text-secondary`）
+- 组合方式：Logo + 主标题 + 副标题 水平排列，`gap: 12px`
+
+### 11.3 导航栏最终布局
+
+```
+[Logo 32px] MPChat Content OS          工作台  外部文章  历史    中/EN
+            ^^^^^^^^^^^^^^^^            ^^^ 当前页高亮 ^^^      ^^^ 语言切换
+            品牌区域 (flex)              导航链接 (flex)          功能区 (flex)
+```
+
+- 品牌区域使用 `display: flex; align-items: center; gap: 12px`
+- 导航链接：选中态使用 `--primary` 下划线或背景色
+- 功能区包含语言切换按钮
+
+---
+
+## 12. 国际化 (i18n) UI 设计
+
+### 12.1 语言切换按钮
+
+- **位置**：导航栏最右侧，导航链接之后
+- **样式**：Pill 形状，`border-radius: 20px`，`padding: 4px 12px`
+- **两态**："中" / "EN"
+- **背景**：`rgba(255,255,255,0.08)`，hover 时 `rgba(255,255,255,0.12)`
+- **切换行为**：无页面刷新，React Context 实时更新所有文案
+- **持久化**：`localStorage.setItem("mpchat-locale", locale)`
+
+### 12.2 布局弹性适应
+
+- 英文文案通常比中文长 30-50%
+- 所有文案容器使用弹性布局（flexbox / grid），避免固定宽度
+- 按钮使用 `min-width` 而非 `width`
+- Tab 文字允许 `white-space: nowrap`
+
+### 12.3 翻译覆盖范围
+
+| 区域 | 中文示例 | 英文示例 |
+|------|----------|----------|
+| 导航 | 工作台 / 外部文章 / 历史 | Workspace / External Article / History |
+| 表单标签 | AI 服务商 / 模型 / 关键词 | Provider / Model / Keywords |
+| 按钮 | 生成文章 / 开始分析 / 复制 | Generate / Analyze / Copy |
+| Tab | 文章内容 / SEO·GEO 分析 / 导出与复制 | Article / SEO·GEO / Export |
+| 提示 | 服务器唤醒中... / 请输入关键词 | Server warming up... / Enter keywords |
+| 空状态 | 还没有生成记录 | No history yet |
+| 错误 | 请求失败：{detail} | Request failed: {detail} |
+
+---
+
+## 13. 外部文章配置条设计
+
+### 13.1 设计目标
+
+外部文章页面不再有独立的 API Key / Model / Base URL 输入框，改为使用共享配置条，继承工作台设置。
+
+### 13.2 默认态（折叠）
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  🔧 AI 配置：Google Gemini / gemini-2.5-flash  ✓  [修改]│
+└──────────────────────────────────────────────────────────┘
+```
+
+- **样式**：`rgba(25,25,30,0.6)` + `backdrop-filter: blur(12px)`
+- **圆角**：`12px`
+- **高度**：`48px`（单行紧凑）
+- **绿色勾号**：`--accent-green` 表示已配置可用
+- **"修改" 链接**：`--primary` 颜色，`cursor: pointer`
+
+### 13.3 展开态
+
+点击 "修改" 后，配置条高度动画展开（`max-height` transition），显示完整配置面板：
+
+- Provider 下拉框（自动填充 Base URL）
+- Model 下拉框
+- API Key 输入框（`type="password"`）
+- Base URL 输入框
+
+展开/收起动画：`max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1)`
+
+### 13.4 数据来源优先级
+
+1. `localStorage["mpchat-ai-config"]`（工作台保存的配置）
+2. 环境变量 `NEXT_PUBLIC_DEFAULT_GEMINI_KEY`（默认 Gemini Key）
+3. 空值（用户需手动输入）
+
+---
+
+## 14. 冷启动提示设计
+
+### 14.1 触发条件
+
+- 用户点击任何需要后端响应的按钮（生成、优化、AI 检测等）
+- 请求发出后超过 **5 秒** 未收到响应
+
+### 14.2 视觉设计
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  ⏳ 服务器正在唤醒中，首次请求可能需要 30-60 秒...        │
+└──────────────────────────────────────────────────────────┘
+```
+
+- **背景**：`rgba(99,91,255,0.15)`
+- **圆角**：`12px`
+- **动画**：脉冲呼吸效果 `@keyframes pulse { 0%,100% { opacity:0.7 } 50% { opacity:1 } }` 周期 2s
+- **位置**：触发按钮下方，不遮挡内容
+- **消失**：收到后端响应后 `opacity 0.3s` 淡出
+
+### 14.3 页面预热机制
+
+`layout.tsx` 挂载时静默调用 `GET /api/v1/health`，提前唤醒后端：
+
+```typescript
+useEffect(() => {
+  fetch(`${API_URL}/api/v1/health`).catch(() => {});
+}, []);
+```
+
+---
+
+## 15. 默认 Key 状态指示
+
+### 15.1 已配置默认 Key
+
+- API Key 输入框 placeholder：`"已配置默认 Key（可覆盖）"`
+- 输入框左侧小圆点：`--accent-green`
+- 用户清空输入框后恢复默认值
+
+### 15.2 无默认 Key（非 Gemini Provider）
+
+- API Key 输入框 placeholder：`"请输入 API Key"`
+- 输入框边框：`--accent-orange` 高亮提示
+- 生成按钮 tooltip：`"请先配置 API Key"`

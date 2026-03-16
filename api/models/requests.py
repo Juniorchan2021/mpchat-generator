@@ -19,6 +19,7 @@ class GenerateRequest(BaseModel):
     use_web: bool = False
     use_serp: bool = False
     geo_mode: bool = True
+    word_count_target: int = 1200
 
 
 class ArticleAnalyzeRequest(BaseModel):

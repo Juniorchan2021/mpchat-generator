@@ -16,6 +16,55 @@ def get_client(api_key: str, base_url: str = "") -> OpenAI:
     return OpenAI(**kwargs)
 
 
+def call_llm(
+    provider: str,
+    api_key: str,
+    base_url: str,
+    model: str,
+    messages: list[dict],
+    max_tokens: int = 16384,
+    temperature: float = 0.7,
+    response_format: dict | None = None,
+) -> str:
+    """Unified LLM call that handles Anthropic separately from OpenAI-compatible providers."""
+    if provider == "anthropic":
+        try:
+            from anthropic import Anthropic
+        except ImportError:
+            raise RuntimeError("anthropic package not installed. Run: pip install anthropic>=0.40.0")
+        client = Anthropic(api_key=api_key)
+        system_msg = ""
+        user_msgs = []
+        for m in messages:
+            if m["role"] == "system":
+                system_msg = m["content"]
+            else:
+                user_msgs.append(m)
+        resp = client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            system=system_msg,
+            messages=user_msgs,
+        )
+        return resp.content[0].text
+    else:
+        client = get_client(api_key, base_url)
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        if response_format:
+            kwargs["response_format"] = response_format
+        try:
+            resp = client.chat.completions.create(**kwargs)
+        except Exception:
+            kwargs.pop("response_format", None)
+            resp = client.chat.completions.create(**kwargs)
+        return resp.choices[0].message.content
+
+
 def geo_prompt_section() -> str:
     return """
 
@@ -38,6 +87,7 @@ def build_system_prompt(
     scenario_label: str,
     web_content: str = "",
     geo_mode: bool = False,
+    word_count_target: int = 1200,
 ) -> str:
     lang_cfg = LANGUAGES.get(language, LANGUAGES["中文 (Chinese)"])
     lang_instruction = lang_cfg["instruction"]
@@ -66,7 +116,7 @@ def build_system_prompt(
 - 文章必须包含 H1（主标题，用 # 表示）、H2（副标题，用 ## 表示）、H3（可选，用 ### 表示）
 - 自然植入用户指定的 SEO 关键词，不堆砌，保持阅读流畅
 - 每段不超过 150 字，适合移动端阅读
-- 文章总长度：800-1200 字（中文）/ 600-900 词（英文）
+- 文章总长度：{word_count_target} 字左右（中文）/ 相应词数（英文）
 - 结尾必须有清晰有力的 CTA（Call to Action），引导用户访问 mp.net 下载 MPChat 或申请 MP Card（官网是 mp.net，不是 mpchat.io）
 
 【输出格式要求（严格遵守 JSON 格式）】
@@ -217,43 +267,54 @@ def validate_keywords(keywords: str) -> str | None:
 
 
 def generate_article(
-    client: OpenAI,
-    model: str,
-    language: str,
-    scenario_label: str,
-    audience_tag: str,
-    selling_points_text: str,
-    style_name: str,
-    style_instruction: str,
-    keywords: str,
+    client: OpenAI = None,
+    model: str = "",
+    language: str = "",
+    scenario_label: str = "",
+    audience_tag: str = "",
+    selling_points_text: str = "",
+    style_name: str = "",
+    style_instruction: str = "",
+    keywords: str = "",
     web_content: str = "",
     geo_mode: bool = False,
+    word_count_target: int = 1200,
+    provider: str = "",
+    api_key: str = "",
+    base_url: str = "",
 ) -> dict:
-    system_prompt = build_system_prompt(language, style_instruction, scenario_label, web_content, geo_mode=geo_mode)
+    system_prompt = build_system_prompt(
+        language, style_instruction, scenario_label, web_content,
+        geo_mode=geo_mode, word_count_target=word_count_target,
+    )
     user_prompt = build_user_prompt(language, scenario_label, audience_tag, selling_points_text, style_name, keywords)
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.82,
-            max_tokens=16384,
-            response_format={"type": "json_object"},
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+    if provider and api_key:
+        raw_text = call_llm(
+            provider=provider, api_key=api_key, base_url=base_url,
+            model=model, messages=messages, max_tokens=16384, temperature=0.82,
+            response_format={"type": "json_object"} if provider != "anthropic" else None,
         )
-    except Exception:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.82,
-            max_tokens=16384,
-        )
+    elif client:
+        try:
+            response = client.chat.completions.create(
+                model=model, messages=messages,
+                temperature=0.82, max_tokens=16384,
+                response_format={"type": "json_object"},
+            )
+        except Exception:
+            response = client.chat.completions.create(
+                model=model, messages=messages,
+                temperature=0.82, max_tokens=16384,
+            )
+        raw_text = response.choices[0].message.content.strip()
+    else:
+        raise ValueError("Either (provider + api_key) or client must be provided")
 
-    raw = strip_code_fences(response.choices[0].message.content.strip())
+    raw = strip_code_fences(raw_text.strip())
     if not raw.startswith("{"):
         match = re.search(r"\{[\s\S]*\}", raw)
         if match:

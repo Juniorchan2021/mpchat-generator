@@ -17,6 +17,7 @@ async def optimize_article(req: OptimizeRequest):
         api_key=req.api_key,
         model=req.model,
         base_url=req.base_url,
+        provider=req.provider,
     )
     return OptimizeResponse(**result)
 
@@ -29,5 +30,6 @@ async def detect_ai(req: AiDetectRequest):
             api_key=req.api_key,
             model=req.model,
             base_url=req.base_url,
+            provider=req.provider,
         )
     }

@@ -409,3 +409,322 @@ pre.article-card {
     padding-top: 12px;
   }
 }
+
+/* ── Tab Bar ── */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+}
+
+.tab-button {
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: 180ms ease;
+  font-size: 0.88rem;
+}
+
+.tab-button:hover {
+  color: var(--foreground);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tab-active {
+  color: var(--foreground);
+  background: rgba(124, 140, 255, 0.12);
+  border-color: rgba(124, 140, 255, 0.28);
+  font-weight: 600;
+}
+
+/* ── Breakdown Bars ── */
+.breakdown-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.breakdown-label {
+  width: 100px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.breakdown-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.breakdown-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.breakdown-value {
+  width: 40px;
+  text-align: right;
+  font-size: 0.85rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* ── SEO/GEO Grid ── */
+.seo-geo-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 700px) {
+  .seo-geo-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Keyword Table ── */
+.kw-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+.kw-table th,
+.kw-table td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.kw-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* ── Export Grid ── */
+.export-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.export-card {
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.export-card h4 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+}
+
+/* ── Publish Grid ── */
+.publish-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.publish-card {
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+@media (max-width: 700px) {
+  .publish-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Selling Point Groups ── */
+.sp-groups {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.sp-group-title {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+  color: var(--primary-strong);
+}
+
+.sp-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sp-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: 180ms ease;
+}
+
+.sp-check:hover {
+  border-color: rgba(124, 140, 255, 0.4);
+}
+
+.sp-check input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  accent-color: var(--primary);
+}
+
+/* ── Preset Chips ── */
+.preset-chip {
+  cursor: pointer;
+  transition: 180ms ease;
+}
+
+.preset-chip:hover {
+  border-color: var(--primary);
+  color: var(--primary-strong);
+  background: rgba(124, 140, 255, 0.08);
+}
+
+/* ── Collapse / Details ── */
+.collapse-header {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 8px 0;
+}
+
+.collapse-header:hover {
+  color: var(--foreground);
+}
+
+/* ── Range Slider ── */
+input[type="range"] {
+  accent-color: var(--primary);
+  border: none;
+  padding: 8px 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+input[type="range"]:focus {
+  box-shadow: none;
+}
+
+/* ── Diff Grid ── */
+.diff-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 700px) {
+  .diff-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ── Language Toggle ── */
+.lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 180ms ease;
+  min-width: 42px;
+}
+
+.lang-toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--foreground);
+}
+
+/* ── Active Nav Link ── */
+.nav-pills a.active {
+  color: var(--primary-strong);
+  border-bottom: 2px solid var(--primary);
+  padding-bottom: 2px;
+}
+
+/* ── AI Config Bar (External Article) ── */
+.ai-config-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(25, 25, 30, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  font-size: 0.88rem;
+  color: var(--muted);
+  margin-bottom: 20px;
+}
+
+.ai-config-bar .config-status {
+  color: #22c55e;
+  font-weight: 500;
+}
+
+.ai-config-bar .config-modify {
+  color: var(--primary-strong);
+  cursor: pointer;
+  font-size: 0.82rem;
+  margin-left: auto;
+}
+
+.ai-config-bar .config-modify:hover {
+  text-decoration: underline;
+}
+
+/* ── Warmup Banner ── */
+@keyframes warmup-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.warmup-banner {
+  padding: 10px 16px;
+  background: rgba(99, 91, 255, 0.15);
+  border: 1px solid rgba(99, 91, 255, 0.2);
+  border-radius: 12px;
+  font-size: 0.88rem;
+  color: var(--muted);
+  animation: warmup-pulse 2s ease-in-out infinite;
+  margin-top: 8px;
+}

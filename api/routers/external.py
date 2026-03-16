@@ -28,4 +28,5 @@ async def optimize_external(req: OptimizeRequest):
         api_key=req.api_key,
         model=req.model,
         base_url=req.base_url,
+        provider=req.provider,
     )

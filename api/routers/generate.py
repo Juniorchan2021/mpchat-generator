@@ -6,7 +6,7 @@ from api.deps import verify_api_key
 from api.models.requests import GenerateRequest
 from api.models.responses import GenerateResponse
 from api.utils import locate_scenario, selling_points_text, style_to_instruction
-from core.generation import generate_article, get_client, validate_keywords
+from core.generation import generate_article, validate_keywords
 from core.image_client import fetch_images_for_article
 from core.knowledge import fetch_web_knowledge
 from core.seo_tools import generate_slug, reading_stats
@@ -24,7 +24,6 @@ async def create_article(req: GenerateRequest):
     scenario = locate_scenario(req.category, req.scenario)
     style_instruction = style_to_instruction(req.style)
     selected_points = req.selling_points or scenario.get("selling_points", [])
-    client = get_client(req.api_key, req.base_url)
 
     web_sources: list[dict] = []
     web_content = ""
@@ -38,7 +37,6 @@ async def create_article(req: GenerateRequest):
         web_content += "\n\n" + serp_to_prompt_context(serp_data)
 
     result = generate_article(
-        client=client,
         model=req.model,
         language=req.language,
         scenario_label=req.scenario,
@@ -49,6 +47,10 @@ async def create_article(req: GenerateRequest):
         keywords=req.keywords,
         web_content=web_content,
         geo_mode=req.geo_mode,
+        word_count_target=req.word_count_target,
+        provider=req.provider,
+        api_key=req.api_key,
+        base_url=req.base_url,
     )
 
     title = result.get("seo_title", req.scenario)

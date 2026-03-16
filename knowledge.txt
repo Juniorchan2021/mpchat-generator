@@ -1,5 +1,5 @@
 # MPChat 产品知识库 / MPChat Product Knowledge Base
-# Version 2.0.1 | Feb 2026
+# Version 3.0 | Mar 2026 (v5.1 update)
 # Live with Crypto — 拥抱加密生活
 
 ## 品牌定位 / Brand Positioning
@@ -140,7 +140,65 @@
 
 英文关键词：crypto credit card, USDT payment, stablecoin wallet, cross-border remittance, Web3 messaging, digital nomad banking, crypto debit card, MPChat app, MP Wallet, decentralized finance app, E2EE crypto chat, crypto red packet
 
+
 ---
+
+## MP Card 支持的订阅与服务 / Supported Subscriptions & Services
+
+MP Card 作为全球通用的 Visa/Mastercard 虚拟卡和实体卡，支持以下主流订阅和在线服务：
+
+### AI 工具
+- ChatGPT Plus / ChatGPT Pro (OpenAI)
+- Claude Pro (Anthropic)
+- Midjourney
+- Cursor Pro
+- OpenAI API 额度充值
+- Adobe Firefly / Creative Cloud
+- Pika / Sora 等 AI 视频工具
+
+### 流媒体与娱乐
+- Netflix / Disney+ / HBO Max
+- Spotify Premium / YouTube Premium
+- Steam / Epic Games / PlayStation Store
+- Apple Music / Audible
+
+### 开发者工具
+- Apple Developer Program ($99/年)
+- Google Play Developer ($25 一次性)
+- GitHub Copilot
+- Vercel Pro / Cloudflare Pro
+- 域名注册（Namecheap / GoDaddy）
+- 云服务（AWS / GCP / Azure）
+
+### 生产力与办公
+- Notion / Obsidian Publish
+- Canva Pro / Figma Professional
+- Grammarly Premium
+- Zoom / Google Workspace / Microsoft 365
+
+### 社交媒体推广
+- Twitter/X 广告
+- Facebook / Instagram 广告（Meta Ads）
+- LinkedIn Premium / Sales Navigator
+- TikTok 商业工具
+
+### 更多场景
+- 跨境电商购物（Amazon / eBay / AliExpress）
+- 国际酒店与机票预订（Booking / Agoda）
+- 在线教育（Coursera / Udemy / MasterClass）
+
+---
+
+## 帮助中心要点 / Help Center Highlights
+
+基于 help.mp.net 整理的常见用户问题：
+
+- **MP Card 申请流程：** 注册 MPChat 账号 → KYC 认证 → 申请虚拟卡 → 充值 USDT/USDC → 开始消费
+- **支持的加密货币：** USDT (TRC20/ERC20)、USDC、BTC、ETH 等主流币种
+- **充值到账时间：** USDT/USDC 充值通常几分钟内到账
+- **消费手续费：** 具体费率见官网，整体低于传统跨境信用卡
+- **安全措施：** 二步验证 (2FA)、交易短信通知、卡片冻结/解冻
+- **客服渠道：** 应用内在线客服、help.mp.net、官方 Telegram 群
 
 ## 下载与注册 / CTA
 
