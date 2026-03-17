@@ -88,6 +88,7 @@
   "label.webSources": "网络来源",
   "aiConfig.title": "AI 配置",
   "aiConfig.inherited": "继承自工作台",
+  "btn.translateToZh": "翻译为简体中文",
   "btn.translateToEn": "翻译为英文",
   "btn.translateToTw": "翻译为繁体中文",
   "btn.translating": "翻译中...",

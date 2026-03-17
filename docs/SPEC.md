@@ -1,6 +1,6 @@
 # MPChat 软文机器人 — 规格与规范文档
 
-> 版本：v5.1 | 最后更新：2026-03-18
+> 版本：v5.2 | 最后更新：2026-03-18
 
 ---
 
@@ -484,17 +484,47 @@ export const api = {
 
 ---
 
+## 6.1 前端翻译工具函数（`lib/translateUtils.ts`）
+
+```typescript
+// 自动检测源语言（供 ExternalClient 使用）
+function detectSourceLang(
+  text: string,
+  stats: { cn: number; en: number }
+): string
+// 返回值之一：
+//   "中文 (Chinese)" | "繁体中文 (Traditional Chinese)" | "英文 (English)"
+
+// 根据源语言推导翻译目标按钮列表（供两个组件共享）
+function getTranslateTargets(sourceLang: string): TranslateTarget[]
+// TranslateTarget = { lang: string; labelKey: string }
+//
+// 映射规则：
+//   中文           → [英文, 繁体中文]
+//   英文           → [简体中文, 繁体中文]
+//   繁体中文       → [简体中文, 英文]
+//   其他           → [简体中文, 英文]
+```
+
+测试覆盖：`frontend/lib/__tests__/translateUtils.test.ts`，共 **21 个测试**全部通过。
+
+---
+
 ## 7. 国际化 Key 新增清单
 
-### 翻译功能 (Phase 1)
+### 翻译功能 (Phase 1 + 增强)
 
 | Key | 中文 | English |
 |-----|------|---------|
-| `btn.translateEn` | 翻译为英文 | Translate to English |
-| `btn.translateTw` | 翻译为繁体中文 | Translate to Traditional Chinese |
-| `msg.translating` | 正在翻译... | Translating... |
+| `btn.translateToZh` | 翻译为简体中文 | Translate to Simplified Chinese |
+| `btn.translateToEn` | 翻译为英文 | Translate to English |
+| `btn.translateToTw` | 翻译为繁体中文 | Translate to Traditional Chinese |
+| `btn.translating` | 翻译中... | Translating... |
+| `btn.copyTranslation` | 复制译文 | Copy Translation |
+| `btn.downloadTranslation` | 下载译文 | Download Translation |
+| `label.translate` | 一键翻译 | Quick Translate |
+| `label.translateResult` | 翻译结果 | Translation |
 | `msg.translateSuccess` | 翻译完成 | Translation complete |
-| `label.translatedArticle` | 翻译结果 | Translated Article |
 
 ### 发布渠道 (Phase 2)
 

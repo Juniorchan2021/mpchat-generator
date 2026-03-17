@@ -7,6 +7,7 @@ import remarkGfm from "remark-gfm";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { loadAiConfig, saveAiConfig, type AiConfig } from "@/lib/aiConfig";
+import { detectSourceLang, getTranslateTargets } from "@/lib/translateUtils";
 
 const PROVIDER_DEFAULTS: Record<string, { model: string; base_url: string }> = {
   gemini: { model: "gemini-2.5-flash", base_url: "https://generativelanguage.googleapis.com/v1beta/openai/" },
@@ -82,6 +83,7 @@ function countWords(text: string): { cn: number; en: number; total: number } {
   return { cn, en, total: cn + en };
 }
 
+
 function countKeywordOccurrences(text: string, keywords: string): Record<string, number> {
   if (!keywords.trim()) return {};
   const result: Record<string, number> = {};
@@ -154,6 +156,16 @@ export function ExternalClient() {
 
   const wordStats = useMemo(() => countWords(article), [article]);
   const kwOccurrences = useMemo(() => countKeywordOccurrences(article, keywords), [article, keywords]);
+
+  const detectedSourceLang = useMemo(
+    () => detectSourceLang(article, wordStats),
+    [article, wordStats],
+  );
+
+  const translateTargets = useMemo(
+    () => getTranslateTargets(detectedSourceLang),
+    [detectedSourceLang],
+  );
 
   const actionLabels: Record<string, string> = {
     analyze: "分析中...",
@@ -273,7 +285,6 @@ export function ExternalClient() {
     if (!article.trim()) return;
     try {
       setLoadingAction("translate");
-      setProgressStage("optimizing");
       setError("");
       setTranslatedArticle(null);
       setTranslateTarget(targetLang);
@@ -283,7 +294,7 @@ export function ExternalClient() {
         base_url: aiCfg.base_url,
         model: aiCfg.model,
         article,
-        source_lang: "中文 (Chinese)",
+        source_lang: detectedSourceLang,
         target_lang: targetLang,
       });
       setTranslatedArticle(resp.translated_article);
@@ -598,26 +609,25 @@ export function ExternalClient() {
       {article.trim() && (
         <section className="glass-card">
           <div className="section-header" style={{marginBottom: translatedArticle ? 12 : 0}}>
-            <h3 style={{fontSize:"1rem",margin:0}}>{t("label.translate")}</h3>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <h3 style={{fontSize:"1rem",margin:0}}>{t("label.translate")}</h3>
+              <span style={{fontSize:"0.75rem",padding:"2px 8px",borderRadius:4,background:"rgba(255,255,255,0.08)",color:"var(--muted)"}}>
+                {detectedSourceLang}
+              </span>
+            </div>
             <div className="action-row">
-              <button
-                className="secondary-button"
-                onClick={() => handleTranslateExternal("英文 (English)")}
-                disabled={loading || !aiCfg.api_key.trim()}
-              >
-                {loadingAction === "translate" && translateTarget === "英文 (English)"
-                  ? t("btn.translating")
-                  : t("btn.translateToEn")}
-              </button>
-              <button
-                className="secondary-button"
-                onClick={() => handleTranslateExternal("繁体中文 (Traditional Chinese)")}
-                disabled={loading || !aiCfg.api_key.trim()}
-              >
-                {loadingAction === "translate" && translateTarget === "繁体中文 (Traditional Chinese)"
-                  ? t("btn.translating")
-                  : t("btn.translateToTw")}
-              </button>
+              {translateTargets.map(({ lang, labelKey }) => (
+                <button
+                  key={lang}
+                  className="secondary-button"
+                  onClick={() => handleTranslateExternal(lang)}
+                  disabled={loading || !aiCfg.api_key.trim()}
+                >
+                  {loadingAction === "translate" && translateTarget === lang
+                    ? t("btn.translating")
+                    : t(labelKey)}
+                </button>
+              ))}
             </div>
           </div>
           {translatedArticle && (

@@ -11,6 +11,7 @@ import { useI18n } from "@/lib/i18n";
 import { saveAiConfig } from "@/lib/aiConfig";
 import { FALLBACK_CONFIG } from "@/lib/fallbackConfig";
 import { pushHistory } from "@/lib/history";
+import { getTranslateTargets } from "@/lib/translateUtils";
 import { ScoreRing, BreakdownBar } from "@/components/ScoreRing";
 import type {
   AiDetectResult,
@@ -228,6 +229,15 @@ export function WorkspaceClient() {
     if (!config) return [];
     return Object.entries(config.scenario_categories).flatMap(([cat, list]) => list.map((s) => ({ ...s, category: cat })));
   }, [config]);
+
+  const translateTargets = useMemo(
+    () => getTranslateTargets(form.language),
+    [form.language],
+  );
+
+  useEffect(() => {
+    setTranslatedArticle(null);
+  }, [form.language]);
 
   function updateForm<K extends keyof GenerateRequest>(key: K, value: GenerateRequest[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -553,20 +563,16 @@ export function WorkspaceClient() {
                   <div className="section-header" style={{marginBottom:translatedArticle ? 12 : 0}}>
                     <h3 style={{fontSize:"1rem",margin:0}}>{t("label.translate")}</h3>
                     <div className="action-row">
-                      <button
-                        className="secondary-button"
-                        onClick={() => handleTranslate("英文 (English)")}
-                        disabled={isTranslating || isLoading}
-                      >
-                        {isTranslating && translateTarget === "英文 (English)" ? t("btn.translating") : t("btn.translateToEn")}
-                      </button>
-                      <button
-                        className="secondary-button"
-                        onClick={() => handleTranslate("繁体中文 (Traditional Chinese)")}
-                        disabled={isTranslating || isLoading}
-                      >
-                        {isTranslating && translateTarget === "繁体中文 (Traditional Chinese)" ? t("btn.translating") : t("btn.translateToTw")}
-                      </button>
+                      {translateTargets.map(({ lang, labelKey }) => (
+                        <button
+                          key={lang}
+                          className="secondary-button"
+                          onClick={() => handleTranslate(lang)}
+                          disabled={isTranslating || isLoading}
+                        >
+                          {isTranslating && translateTarget === lang ? t("btn.translating") : t(labelKey)}
+                        </button>
+                      ))}
                     </div>
                   </div>
                   {translatedArticle && (

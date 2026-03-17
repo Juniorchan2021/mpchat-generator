@@ -88,6 +88,7 @@
   "label.webSources": "Web Sources",
   "aiConfig.title": "AI Config",
   "aiConfig.inherited": "Inherited from Workspace",
+  "btn.translateToZh": "Translate to Simplified Chinese",
   "btn.translateToEn": "Translate to English",
   "btn.translateToTw": "Translate to Traditional Chinese",
   "btn.translating": "Translating...",
