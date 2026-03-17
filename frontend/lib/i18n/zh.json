@@ -87,5 +87,13 @@
   "label.imagePrompts": "AI 配图提示词",
   "label.webSources": "网络来源",
   "aiConfig.title": "AI 配置",
-  "aiConfig.inherited": "继承自工作台"
+  "aiConfig.inherited": "继承自工作台",
+  "btn.translateToEn": "翻译为英文",
+  "btn.translateToTw": "翻译为繁体中文",
+  "btn.translating": "翻译中...",
+  "btn.copyTranslation": "复制译文",
+  "btn.downloadTranslation": "下载译文",
+  "label.translateResult": "翻译结果",
+  "label.translate": "一键翻译",
+  "msg.translateSuccess": "翻译完成"
 }

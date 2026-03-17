@@ -114,3 +114,19 @@ export interface PublishResponse {
   id?: string | number;
   [key: string]: unknown;
 }
+
+export interface TranslateRequest {
+  provider: string;
+  model: string;
+  api_key: string;
+  base_url: string;
+  article: string;
+  source_lang: string;
+  target_lang: string;
+}
+
+export interface TranslateResponse {
+  translated_article: string;
+  source_lang: string;
+  target_lang: string;
+}

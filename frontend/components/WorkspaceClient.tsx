@@ -145,6 +145,10 @@ export function WorkspaceClient() {
   const [publishDraft, setPublishDraft] = useState(true);
   const [publishResults, setPublishResults] = useState<Record<string, { status: string; data?: PublishResponse }>>({});
   const [aiDetect, setAiDetect] = useState<AiDetectResult | null>(null);
+  const [translatedArticle, setTranslatedArticle] = useState<string | null>(null);
+  const [translateTarget, setTranslateTarget] = useState("");
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translateOpen, setTranslateOpen] = useState(true);
   const [showWarmup, setShowWarmup] = useState(false);
   const [schemas, setSchemas] = useState<{ article_schema: Record<string, unknown>; faq_schema: Record<string, unknown> } | null>(null);
   const [internalLinks, setInternalLinks] = useState<Array<{ text: string; url: string }>>([]);
@@ -278,7 +282,7 @@ export function WorkspaceClient() {
     const err = validate();
     if (err) { setError(err); return; }
     const warmupTimer = setTimeout(() => setShowWarmup(true), 5000);
-    try { setIsLoading(true); setError(""); setChangelog([]); setAiDetect(null); setSchemas(null); setSeo(null); setGeo(null);
+    try { setIsLoading(true); setError(""); setChangelog([]); setAiDetect(null); setSchemas(null); setSeo(null); setGeo(null); setTranslatedArticle(null);
       const generated = await api.generate({ ...form, word_count_target: wordCountTarget });
       setResult(generated);
       await runAnalyses(generated, form.keywords, form.selling_points);
@@ -318,6 +322,30 @@ export function WorkspaceClient() {
       const resp = await api.detectAi({ api_key: form.api_key, model: form.model, base_url: form.base_url, article: result.article, provider: form.provider });
       setAiDetect(parseAiDetectResult(resp.result));
     } catch (e) { setError(e instanceof Error ? e.message : "检测失败"); } finally { setIsLoading(false); }
+  }
+
+  async function handleTranslate(targetLang: string) {
+    if (!result) return;
+    try {
+      setIsTranslating(true);
+      setTranslatedArticle(null);
+      setTranslateTarget(targetLang);
+      const resp = await api.translate({
+        provider: form.provider,
+        api_key: form.api_key,
+        base_url: form.base_url,
+        model: form.model,
+        article: result.article,
+        source_lang: form.language || "中文 (Chinese)",
+        target_lang: targetLang,
+      });
+      setTranslatedArticle(resp.translated_article);
+      setTranslateOpen(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "翻译失败，请稍后重试");
+    } finally {
+      setIsTranslating(false);
+    }
   }
 
   async function handlePublish(platform: string) {
@@ -521,6 +549,39 @@ export function WorkspaceClient() {
                 <div className="section-header"><div><h2>{result.title}</h2><p>{result.meta_description}</p></div><span className="slug-chip">/{result.slug}</span></div>
                 <div className="pill-row">{(result.ab_titles ?? []).map((t) => (<button className="pill preset-chip" key={t} onClick={() => handleAdoptTitle(t)} title="点击采用此标题">{t}</button>))}</div>
                 <div className="article-card rendered-article"><ReactMarkdown remarkPlugins={[remarkGfm]}>{interleaveImages(result.article, result.images ?? [])}</ReactMarkdown></div>
+                <div className="glass-card" style={{marginTop:16,background:"rgba(255,255,255,0.03)"}}>
+                  <div className="section-header" style={{marginBottom:translatedArticle ? 12 : 0}}>
+                    <h3 style={{fontSize:"1rem",margin:0}}>{t("label.translate")}</h3>
+                    <div className="action-row">
+                      <button
+                        className="secondary-button"
+                        onClick={() => handleTranslate("英文 (English)")}
+                        disabled={isTranslating || isLoading}
+                      >
+                        {isTranslating && translateTarget === "英文 (English)" ? t("btn.translating") : t("btn.translateToEn")}
+                      </button>
+                      <button
+                        className="secondary-button"
+                        onClick={() => handleTranslate("繁体中文 (Traditional Chinese)")}
+                        disabled={isTranslating || isLoading}
+                      >
+                        {isTranslating && translateTarget === "繁体中文 (Traditional Chinese)" ? t("btn.translating") : t("btn.translateToTw")}
+                      </button>
+                    </div>
+                  </div>
+                  {translatedArticle && (
+                    <details open={translateOpen} onToggle={(e) => setTranslateOpen((e.target as HTMLDetailsElement).open)}>
+                      <summary className="collapse-header">{t("label.translateResult")} — {translateTarget}</summary>
+                      <div style={{marginTop:12}}>
+                        <div className="action-row" style={{marginBottom:8}}>
+                          <button className="secondary-button" onClick={() => copyText(translatedArticle, setCopyMsg)}>{t("btn.copyTranslation")}</button>
+                          <button className="secondary-button" onClick={() => downloadFile(translatedArticle, `${result.slug}-${translateTarget}.md`, "text/markdown")}>{t("btn.downloadTranslation")}</button>
+                        </div>
+                        <div className="article-card rendered-article"><ReactMarkdown remarkPlugins={[remarkGfm]}>{translatedArticle}</ReactMarkdown></div>
+                      </div>
+                    </details>
+                  )}
+                </div>
               </article>
               <aside className="stack-column">
                 <div className="glass-card">

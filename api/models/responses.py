@@ -57,3 +57,9 @@ class PublishResponse(BaseModel):
     id: str | int | None = None
     error: str = ""
     preview: str = ""
+
+
+class TranslateResponse(BaseModel):
+    translated_article: str
+    source_lang: str
+    target_lang: str

@@ -51,7 +51,7 @@ type GeoData = {
   };
 };
 
-type LoadingAction = null | "analyze" | "seo" | "geo" | "dual" | "triple" | "humanize" | "detect";
+type LoadingAction = null | "analyze" | "seo" | "geo" | "dual" | "triple" | "humanize" | "detect" | "translate";
 type ProgressStage = "" | "analyzing" | "optimizing" | "rescoring";
 
 function downloadFile(content: string, filename: string, mime = "text/plain") {
@@ -116,6 +116,9 @@ export function ExternalClient() {
   const [originalArticle, setOriginalArticle] = useState("");
   const [showDiff, setShowDiff] = useState(false);
   const [aiDetect, setAiDetect] = useState<AiDetectResult | null>(null);
+  const [translatedArticle, setTranslatedArticle] = useState<string | null>(null);
+  const [translateTarget, setTranslateTarget] = useState("");
+  const [translateOpen, setTranslateOpen] = useState(true);
 
   const loading = loadingAction !== null;
 
@@ -160,6 +163,7 @@ export function ExternalClient() {
     triple: "三合一优化中...",
     humanize: "人性化改写中...",
     detect: "AI 检测中...",
+    translate: t("btn.translating"),
   };
 
   const stageLabels: Record<string, string> = {
@@ -191,6 +195,7 @@ export function ExternalClient() {
       setError("");
       setAnalysis(null);
       setAiDetect(null);
+      setTranslatedArticle(null);
       if (!originalArticle) setOriginalArticle(article);
       const data = await api.optimizeExternal({
         provider: aiCfg.provider,
@@ -261,6 +266,33 @@ export function ExternalClient() {
       setError(err instanceof Error ? err.message : "检测失败");
     } finally {
       clearTimeout(warmupTimer); setShowWarmup(false); setLoadingAction(null); setProgressStage("");
+    }
+  }
+
+  async function handleTranslateExternal(targetLang: string) {
+    if (!article.trim()) return;
+    try {
+      setLoadingAction("translate");
+      setProgressStage("optimizing");
+      setError("");
+      setTranslatedArticle(null);
+      setTranslateTarget(targetLang);
+      const resp = await api.translateExternal({
+        provider: aiCfg.provider,
+        api_key: aiCfg.api_key,
+        base_url: aiCfg.base_url,
+        model: aiCfg.model,
+        article,
+        source_lang: "中文 (Chinese)",
+        target_lang: targetLang,
+      });
+      setTranslatedArticle(resp.translated_article);
+      setTranslateOpen(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "翻译失败，请稍后重试");
+    } finally {
+      setLoadingAction(null);
+      setProgressStage("");
     }
   }
 
@@ -562,6 +594,46 @@ export function ExternalClient() {
           <ul className="plain-list" style={{marginTop:12}}>{(optimized.changelog ?? []).map((item, i) => (<li key={i}>{item}</li>))}</ul>
         </section>
       ) : null}
+
+      {article.trim() && (
+        <section className="glass-card">
+          <div className="section-header" style={{marginBottom: translatedArticle ? 12 : 0}}>
+            <h3 style={{fontSize:"1rem",margin:0}}>{t("label.translate")}</h3>
+            <div className="action-row">
+              <button
+                className="secondary-button"
+                onClick={() => handleTranslateExternal("英文 (English)")}
+                disabled={loading || !aiCfg.api_key.trim()}
+              >
+                {loadingAction === "translate" && translateTarget === "英文 (English)"
+                  ? t("btn.translating")
+                  : t("btn.translateToEn")}
+              </button>
+              <button
+                className="secondary-button"
+                onClick={() => handleTranslateExternal("繁体中文 (Traditional Chinese)")}
+                disabled={loading || !aiCfg.api_key.trim()}
+              >
+                {loadingAction === "translate" && translateTarget === "繁体中文 (Traditional Chinese)"
+                  ? t("btn.translating")
+                  : t("btn.translateToTw")}
+              </button>
+            </div>
+          </div>
+          {translatedArticle && (
+            <details open={translateOpen} onToggle={(e) => setTranslateOpen((e.target as HTMLDetailsElement).open)}>
+              <summary className="collapse-header">{t("label.translateResult")} — {translateTarget}</summary>
+              <div style={{marginTop:12}}>
+                <div className="action-row" style={{marginBottom:8}}>
+                  <button className="secondary-button" onClick={() => doCopy(translatedArticle)}>{t("btn.copyTranslation")}</button>
+                  <button className="secondary-button" onClick={() => downloadFile(translatedArticle, `translated-${translateTarget}.md`, "text/markdown")}>{t("btn.downloadTranslation")}</button>
+                </div>
+                <div className="article-card rendered-article"><ReactMarkdown remarkPlugins={[remarkGfm]}>{translatedArticle}</ReactMarkdown></div>
+              </div>
+            </details>
+          )}
+        </section>
+      )}
     </div>
   );
 }

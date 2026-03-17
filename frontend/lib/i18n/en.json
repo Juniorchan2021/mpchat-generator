@@ -87,5 +87,13 @@
   "label.imagePrompts": "AI Image Prompts",
   "label.webSources": "Web Sources",
   "aiConfig.title": "AI Config",
-  "aiConfig.inherited": "Inherited from Workspace"
+  "aiConfig.inherited": "Inherited from Workspace",
+  "btn.translateToEn": "Translate to English",
+  "btn.translateToTw": "Translate to Traditional Chinese",
+  "btn.translating": "Translating...",
+  "btn.copyTranslation": "Copy Translation",
+  "btn.downloadTranslation": "Download Translation",
+  "label.translateResult": "Translation",
+  "label.translate": "Quick Translate",
+  "msg.translateSuccess": "Translation complete"
 }

@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import analyze, config, external, generate, optimize, publish, tools
+from api.routers import analyze, config, external, generate, optimize, publish, tools, translate
 
 load_dotenv()
 
@@ -55,5 +55,6 @@ for router in (
     external.router,
     publish.router,
     tools.router,
+    translate.router,
 ):
     app.include_router(router)

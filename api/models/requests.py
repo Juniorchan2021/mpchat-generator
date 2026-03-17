@@ -94,3 +94,13 @@ class ImageSearchRequest(BaseModel):
     ai_terms: list[str] = []
     article_title: str = ""
     per_query: int = Field(default=2, ge=1, le=10)
+
+
+class TranslateRequest(BaseModel):
+    provider: str = "openai"
+    model: str = "gpt-4o"
+    api_key: str = Field(min_length=1)
+    base_url: str = ""
+    article: str = Field(min_length=1, max_length=100000)
+    source_lang: str = Field(min_length=1)
+    target_lang: str = Field(min_length=1)

@@ -7,6 +7,8 @@ import type {
   OptimizeResponse,
   PublishPayload,
   PublishResponse,
+  TranslateRequest,
+  TranslateResponse,
 } from "@/lib/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -163,4 +165,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+
+  translate: (payload: TranslateRequest) =>
+    request<TranslateResponse>("/api/v1/translate", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, 120000),
+
+  translateExternal: (payload: TranslateRequest) =>
+    request<TranslateResponse>("/api/v1/external/translate", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, 120000),
 };
