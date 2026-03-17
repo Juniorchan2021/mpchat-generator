@@ -12,6 +12,8 @@ from core.publishers import (
     format_for_zhihu,
     publish_to_devto,
     publish_to_hashnode,
+    publish_to_medium,
+    publish_to_paragraph,
 )
 
 router = APIRouter(prefix="/api/v1/publish", tags=["publish"])
@@ -44,8 +46,33 @@ async def publish_hashnode(req: PublishRequest):
 
 
 @router.post("/medium")
-async def preview_medium(req: PublishRequest):
+async def publish_medium(req: PublishRequest):
+    """Publish to Medium via API if medium_token provided; fallback to format preview."""
+    if req.medium_token:
+        publish_status = "draft" if req.published is False else "public"
+        return await asyncio.to_thread(
+            publish_to_medium,
+            token=req.medium_token,
+            title=req.title,
+            body_markdown=req.article,
+            tags=req.tags,
+            canonical_url=req.canonical_url,
+            publish_status=publish_status,
+        )
     return {"ok": True, "preview": format_for_medium(req.title, req.article, req.meta_description, req.canonical_url)}
+
+
+@router.post("/paragraph")
+async def publish_paragraph(req: PublishRequest):
+    """Publish to Paragraph.xyz via API."""
+    return await asyncio.to_thread(
+        publish_to_paragraph,
+        api_key=req.paragraph_key,
+        title=req.title,
+        body_markdown=req.article,
+        tags=req.tags,
+        canonical_url=req.canonical_url,
+    )
 
 
 @router.post("/linkedin")

@@ -8,6 +8,14 @@ import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { loadAiConfig, saveAiConfig, type AiConfig } from "@/lib/aiConfig";
 import { detectSourceLang, getTranslateTargets } from "@/lib/translateUtils";
+import type { PublishResponse } from "@/lib/types";
+
+const EXTERNAL_PLATFORMS = [
+  { id: "devto", label: "Dev.to", needsKey: true },
+  { id: "hashnode", label: "Hashnode", needsKey: true },
+  { id: "medium", label: "Medium", needsKey: true },
+  { id: "paragraph", label: "Paragraph", needsKey: true },
+];
 
 const PROVIDER_DEFAULTS: Record<string, { model: string; base_url: string }> = {
   gemini: { model: "gemini-2.5-flash", base_url: "https://generativelanguage.googleapis.com/v1beta/openai/" },
@@ -121,6 +129,14 @@ export function ExternalClient() {
   const [translatedArticle, setTranslatedArticle] = useState<string | null>(null);
   const [translateTarget, setTranslateTarget] = useState("");
   const [translateOpen, setTranslateOpen] = useState(true);
+  const [publishTitle, setPublishTitle] = useState("");
+  const [extDevtoKey, setExtDevtoKey] = useState("");
+  const [extHashnodeToken, setExtHashnodeToken] = useState("");
+  const [extHashnodePubId, setExtHashnodePubId] = useState("");
+  const [extMediumToken, setExtMediumToken] = useState("");
+  const [extParagraphKey, setExtParagraphKey] = useState("");
+  const [extPublishDraft, setExtPublishDraft] = useState(true);
+  const [extPublishResults, setExtPublishResults] = useState<Record<string, { status: string; data?: PublishResponse }>>({});
 
   const loading = loadingAction !== null;
 
@@ -304,6 +320,28 @@ export function ExternalClient() {
     } finally {
       setLoadingAction(null);
       setProgressStage("");
+    }
+  }
+
+  async function handleExtPublish(platform: string) {
+    const titleToUse = publishTitle.trim() || "无标题";
+    const tags = keywords.split(",").map((k) => k.trim()).filter(Boolean);
+    try {
+      setExtPublishResults((prev) => ({ ...prev, [platform]: { status: "loading" } }));
+      const resp = await api.publishTo(platform, {
+        title: titleToUse,
+        article,
+        tags,
+        published: !extPublishDraft,
+        api_key: extDevtoKey,
+        token: extHashnodeToken,
+        publication_id: extHashnodePubId,
+        medium_token: extMediumToken,
+        paragraph_key: extParagraphKey,
+      });
+      setExtPublishResults((prev) => ({ ...prev, [platform]: { status: "done", data: resp } }));
+    } catch (e) {
+      setExtPublishResults((prev) => ({ ...prev, [platform]: { status: "error", data: { preview: e instanceof Error ? e.message : "发布失败" } } }));
     }
   }
 
@@ -642,6 +680,53 @@ export function ExternalClient() {
               </div>
             </details>
           )}
+        </section>
+      )}
+
+      {article.trim() && (
+        <section className="glass-card">
+          <h2>{t("label.publish")}</h2>
+          <div className="form-grid" style={{marginBottom:16}}>
+            <label style={{gridColumn:"1/-1"}}><span>{t("label.publishTitle")}</span><input placeholder={t("placeholder.publishTitle")} value={publishTitle} onChange={(e) => setPublishTitle(e.target.value)} /></label>
+            <label><span>Dev.to API Key</span><input type="password" value={extDevtoKey} onChange={(e) => setExtDevtoKey(e.target.value)} /></label>
+            <label><span>Hashnode Token</span><input type="password" value={extHashnodeToken} onChange={(e) => setExtHashnodeToken(e.target.value)} /></label>
+            <label><span>Hashnode Publication ID</span><input value={extHashnodePubId} onChange={(e) => setExtHashnodePubId(e.target.value)} /></label>
+            <label><span>Medium Integration Token</span><input type="password" placeholder={t("placeholder.mediumToken")} value={extMediumToken} onChange={(e) => setExtMediumToken(e.target.value)} /></label>
+            <label><span>Paragraph API Key</span><input type="password" value={extParagraphKey} onChange={(e) => setExtParagraphKey(e.target.value)} /></label>
+            <label className="toggle" style={{alignSelf:"end"}}><input type="checkbox" checked={extPublishDraft} onChange={(e) => setExtPublishDraft(e.target.checked)} /><span>{t("label.draftMode")}</span></label>
+          </div>
+          <div className="publish-grid">
+            {EXTERNAL_PLATFORMS.map((p) => {
+              const pr = extPublishResults[p.id];
+              return (
+                <div key={p.id} className="publish-card">
+                  <div className="section-header" style={{marginBottom:8}}>
+                    <strong>{p.label}</strong>
+                    <button
+                      className="secondary-button"
+                      onClick={() => handleExtPublish(p.id)}
+                      disabled={loading || pr?.status === "loading"}
+                      style={{padding:"6px 12px",fontSize:"0.82rem"}}
+                    >
+                      {pr?.status === "loading" ? "..." : p.needsKey ? t("btn.publish") : t("btn.preview")}
+                    </button>
+                  </div>
+                  {pr?.status === "done" && pr.data?.preview && (
+                    <div>
+                      <pre className="article-card" style={{maxHeight:160,overflow:"auto",fontSize:"0.78rem"}}>{pr.data.preview}</pre>
+                      <button className="secondary-button" style={{marginTop:6,padding:"4px 10px",fontSize:"0.78rem"}} onClick={() => doCopy(pr.data?.preview || "")}>{t("btn.copy")}</button>
+                    </div>
+                  )}
+                  {pr?.status === "done" && pr.data?.url && (
+                    <a href={pr.data.url as string} target="_blank" rel="noreferrer" style={{color:"var(--primary)",fontSize:"0.82rem"}}>{t("label.viewArticle")}</a>
+                  )}
+                  {pr?.status === "error" && (
+                    <p style={{color:"var(--danger)",fontSize:"0.82rem"}}>{pr.data?.preview || t("msg.publishFailed")}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </section>
       )}
     </div>

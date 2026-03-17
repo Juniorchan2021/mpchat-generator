@@ -114,6 +114,109 @@ def publish_to_hashnode(
 # Format Converters (copy-ready)
 # ══════════════════════════════════════════════════════════════════════════════
 
+def publish_to_paragraph(
+    api_key: str,
+    title: str,
+    body_markdown: str,
+    tags: list[str] | None = None,
+    canonical_url: str = "",
+) -> dict:
+    """Publish article to Paragraph.xyz via API."""
+    if not api_key or not api_key.strip():
+        return {"ok": False, "error": "Paragraph API Key 未配置"}
+    if not title or not title.strip():
+        return {"ok": False, "error": "标题不能为空"}
+    if not body_markdown or not body_markdown.strip():
+        return {"ok": False, "error": "文章内容不能为空"}
+
+    headers = {
+        "Authorization": api_key.strip(),
+        "Content-Type": "application/json",
+    }
+    payload: dict = {
+        "title": title,
+        "bodyMarkdown": body_markdown,
+        "tags": (tags or [])[:5],
+    }
+    if canonical_url:
+        payload["canonicalUrl"] = canonical_url
+
+    try:
+        r = requests.post(
+            "https://api.paragraph.xyz/blogs/posts",
+            headers=headers,
+            json=payload,
+            timeout=30,
+        )
+        if r.status_code in (200, 201):
+            data = r.json()
+            return {"ok": True, "url": data.get("url", ""), "id": data.get("id")}
+        return {"ok": False, "error": f"HTTP {r.status_code}: {r.text[:200]}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def publish_to_medium(
+    token: str,
+    title: str,
+    body_markdown: str,
+    tags: list[str] | None = None,
+    canonical_url: str = "",
+    publish_status: str = "draft",
+) -> dict:
+    """Publish article to Medium via API. Falls back to format preview if token is missing or /me fails."""
+    if not token or not token.strip():
+        return {"ok": True, "preview": format_for_medium(title, body_markdown, "", canonical_url)}
+
+    auth_headers = {
+        "Authorization": f"Bearer {token.strip()}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Accept-Charset": "utf-8",
+    }
+
+    # Step 1: fetch authenticated user id
+    try:
+        me_resp = requests.get(
+            "https://api.medium.com/v1/me",
+            headers=auth_headers,
+            timeout=15,
+        )
+        if me_resp.status_code != 200:
+            return {"ok": True, "preview": format_for_medium(title, body_markdown, "", canonical_url)}
+        user_id = me_resp.json().get("data", {}).get("id", "")
+    except Exception:
+        return {"ok": True, "preview": format_for_medium(title, body_markdown, "", canonical_url)}
+
+    if not user_id:
+        return {"ok": True, "preview": format_for_medium(title, body_markdown, "", canonical_url)}
+
+    # Step 2: create post
+    payload: dict = {
+        "title": title,
+        "contentFormat": "markdown",
+        "content": body_markdown,
+        "tags": (tags or [])[:5],
+        "publishStatus": publish_status if publish_status in ("draft", "public", "unlisted") else "draft",
+    }
+    if canonical_url:
+        payload["canonicalUrl"] = canonical_url
+
+    try:
+        post_resp = requests.post(
+            f"https://api.medium.com/v1/users/{user_id}/posts",
+            headers=auth_headers,
+            json=payload,
+            timeout=30,
+        )
+        if post_resp.status_code in (200, 201):
+            data = post_resp.json().get("data", {})
+            return {"ok": True, "url": data.get("url", ""), "id": data.get("id")}
+        return {"ok": False, "error": f"HTTP {post_resp.status_code}: {post_resp.text[:200]}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def format_for_medium(
     title: str, article: str, meta_desc: str = "", canonical_url: str = ""
 ) -> str:

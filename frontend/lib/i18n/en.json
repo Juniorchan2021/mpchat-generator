@@ -96,5 +96,13 @@
   "btn.downloadTranslation": "Download Translation",
   "label.translateResult": "Translation",
   "label.translate": "Quick Translate",
-  "msg.translateSuccess": "Translation complete"
+  "msg.translateSuccess": "Translation complete",
+  "label.publish": "Distribute",
+  "label.publishTitle": "Article Title",
+  "label.draftMode": "Draft Mode",
+  "label.viewArticle": "View Article",
+  "btn.preview": "Generate Preview",
+  "msg.publishFailed": "Publish failed",
+  "placeholder.publishTitle": "Enter article title (for publishing)",
+  "placeholder.mediumToken": "No token = format preview"
 }

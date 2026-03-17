@@ -48,7 +48,8 @@ const EMPTY_FORM: GenerateRequest = {
 const PLATFORMS = [
   { id: "devto", label: "Dev.to", needsKey: true },
   { id: "hashnode", label: "Hashnode", needsKey: true },
-  { id: "medium", label: "Medium", needsKey: false },
+  { id: "medium", label: "Medium", needsKey: true },
+  { id: "paragraph", label: "Paragraph", needsKey: true },
   { id: "linkedin", label: "LinkedIn", needsKey: false },
   { id: "twitter", label: "Twitter", needsKey: false },
   { id: "zhihu", label: "知乎", needsKey: false },
@@ -143,6 +144,8 @@ export function WorkspaceClient() {
   const [devtoKey, setDevtoKey] = useState("");
   const [hashnodeToken, setHashnodeToken] = useState("");
   const [hashnodePubId, setHashnodePubId] = useState("");
+  const [mediumToken, setMediumToken] = useState("");
+  const [paragraphKey, setParagraphKey] = useState("");
   const [publishDraft, setPublishDraft] = useState(true);
   const [publishResults, setPublishResults] = useState<Record<string, { status: string; data?: PublishResponse }>>({});
   const [aiDetect, setAiDetect] = useState<AiDetectResult | null>(null);
@@ -362,7 +365,7 @@ export function WorkspaceClient() {
     if (!result) return;
     try {
       setPublishResults((prev) => ({ ...prev, [platform]: { status: "loading" } }));
-      const resp = await api.publishTo(platform, { title: result.title, article: result.article, meta_description: result.meta_description, slug: result.slug, tags: form.keywords.split(",").map((k) => k.trim()).filter(Boolean), published: !publishDraft, api_key: devtoKey, token: hashnodeToken, publication_id: hashnodePubId });
+      const resp = await api.publishTo(platform, { title: result.title, article: result.article, meta_description: result.meta_description, slug: result.slug, tags: form.keywords.split(",").map((k) => k.trim()).filter(Boolean), published: !publishDraft, api_key: devtoKey, token: hashnodeToken, publication_id: hashnodePubId, medium_token: mediumToken, paragraph_key: paragraphKey });
       setPublishResults((prev) => ({ ...prev, [platform]: { status: "done", data: resp } }));
     } catch (e) {
       setPublishResults((prev) => ({ ...prev, [platform]: { status: "error", data: { preview: e instanceof Error ? e.message : "失败" } } }));
@@ -659,6 +662,8 @@ export function WorkspaceClient() {
                 <label><span>Dev.to API Key</span><input type="password" value={devtoKey} onChange={(e) => setDevtoKey(e.target.value)} /></label>
                 <label><span>Hashnode Token</span><input type="password" value={hashnodeToken} onChange={(e) => setHashnodeToken(e.target.value)} /></label>
                 <label><span>Hashnode Publication ID</span><input value={hashnodePubId} onChange={(e) => setHashnodePubId(e.target.value)} /></label>
+                <label><span>Medium Integration Token</span><input type="password" placeholder="无 Token 则生成预览" value={mediumToken} onChange={(e) => setMediumToken(e.target.value)} /></label>
+                <label><span>Paragraph API Key</span><input type="password" value={paragraphKey} onChange={(e) => setParagraphKey(e.target.value)} /></label>
                 <label className="toggle" style={{alignSelf:"end"}}><input type="checkbox" checked={publishDraft} onChange={(e) => setPublishDraft(e.target.checked)} /><span>草稿模式</span></label>
               </div>
               <div className="publish-grid">{PLATFORMS.map((p) => {

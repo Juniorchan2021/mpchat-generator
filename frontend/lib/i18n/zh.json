@@ -96,5 +96,13 @@
   "btn.downloadTranslation": "下载译文",
   "label.translateResult": "翻译结果",
   "label.translate": "一键翻译",
-  "msg.translateSuccess": "翻译完成"
+  "msg.translateSuccess": "翻译完成",
+  "label.publish": "内容分发",
+  "label.publishTitle": "文章标题",
+  "label.draftMode": "草稿模式",
+  "label.viewArticle": "查看文章",
+  "btn.preview": "生成预览",
+  "msg.publishFailed": "发布失败",
+  "placeholder.publishTitle": "输入文章标题（用于发布）",
+  "placeholder.mediumToken": "无 Token 则生成预览"
 }

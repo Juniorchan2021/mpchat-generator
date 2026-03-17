@@ -55,6 +55,8 @@ class PublishRequest(BaseModel):
     api_key: str = ""
     token: str = ""
     publication_id: str = ""
+    medium_token: str = ""
+    paragraph_key: str = ""
 
 
 class SchemaRequest(BaseModel):

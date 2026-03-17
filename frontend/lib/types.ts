@@ -105,6 +105,8 @@ export interface PublishPayload {
   api_key?: string;
   token?: string;
   publication_id?: string;
+  medium_token?: string;
+  paragraph_key?: string;
 }
 
 export interface PublishResponse {

@@ -1,0 +1,68 @@
+# MPChat 软文机器人 — 项目规则
+
+## 技术栈
+
+- 前端: Next.js 16 + React 19 + TypeScript (strict) + Tailwind CSS 4, 静态导出, 部署 Cloudflare Pages
+- 后端: FastAPI + Python 3.11 + Pydantic v2, uvicorn 启动
+- LLM: OpenAI SDK (兼容 Gemini/DeepSeek/Groq 等) + Anthropic SDK
+
+## 关键文档
+
+- `docs/PROJECT_CONTEXT.md` — 完整架构、数据流、组件清单、API 列表
+- `docs/TASK_PLAN.md` — 4 个新功能实施步骤
+- `docs/PRD.md` — 产品需求：用户故事 + 验收标准
+- `docs/SPEC.md` — API 规格、数据模型、Prompt 模板、i18n Key 清单
+
+修改代码前应先阅读相关文档了解上下文。
+
+## 文件结构
+
+```
+frontend/
+  app/<route>/page.tsx       # 页面 ("use client")
+  components/<Name>Client.tsx # 组件 (PascalCase)
+  lib/api.ts                  # 统一 API 封装 (api 对象)
+  lib/types.ts                # 全局 TS 类型
+  lib/i18n/{zh,en}.json       # 国际化 (key: "namespace.key")
+api/
+  main.py                     # 入口 + CORS + 路由注册
+  models/requests.py          # Pydantic 请求模型
+  models/responses.py         # Pydantic 响应模型
+  routers/<feature>.py        # 路由 (APIRouter prefix="/api/v1")
+core/
+  generation.py               # call_llm() — 所有 LLM 调用统一入口
+  <module>.py                 # 业务逻辑
+根目录 *.py                    # 原始实现, core/ 做 re-export
+```
+
+## 编码规范
+
+### TypeScript / React
+
+- 函数组件 + Hooks, 禁止 class 组件
+- 状态: `useState` + `localStorage`, 不引入外部状态库
+- 异步: `async/await` + `try/catch` + loading 状态
+- 命名: 事件处理 `handle<Action>`, 组件 PascalCase
+- UI 沿用 glass-card 设计体系
+- 禁止 `any` 类型 (外部 API fallback 除外)
+
+### Python
+
+- 函数参数和返回值必须标注类型
+- Pydantic `Field()` 校验, `HTTPException` 处理异常
+- `logging` 记录日志, 禁止 `print()`
+
+### 通用
+
+- 不写纯叙述性注释, 只注释非显而易见的逻辑
+- LLM 端点请求体必含: `provider`, `model`, `api_key`, `base_url`
+- API 路径前缀 `/api/v1/`, 认证 `X-API-Key` header
+- 新增 UI 文案必须同步 `zh.json` + `en.json`
+- 新路由必须在 `api/main.py` 注册
+
+## 提交前检查
+
+1. `cd frontend && npm run build` — 前端构建无错误
+2. `python3 -c "import ast; ast.parse(open('file').read())"` — Python 语法正确
+3. i18n 双语同步
+4. 新增代码无 `any` 类型
