@@ -1,6 +1,6 @@
 # MPChat 软文机器人 — 项目架构总结
 
-> 最后更新：2026-03-18 | 生成者：Opus 4.6
+> 最后更新：2026-03-18 | v5.1 — Phase 1 翻译功能已上线
 
 ---
 
@@ -9,6 +9,7 @@
 MPChat 软文机器人是一个面向 MPChat 运营团队的 **AI 驱动长文内容生产中心**，核心能力：
 
 - **软文工作台**：基于场景/卖点/文风/关键词参数，一键生成 SEO+GEO 优化的 Markdown 长文
+- **多语言翻译**：一键将生成/优化后的文章翻译为英文或繁体中文，保留 Markdown 格式
 - **外部文章检测与优化**：对已有博客文章进行 SEO/GEO 评分、AI 检测、多模式优化
 - **多平台发布**：生成内容一键分发到 Dev.to、Hashnode、Medium、LinkedIn 等平台
 - **历史记录**：本地持久化所有生成记录，支持回溯和复用
@@ -71,16 +72,16 @@ MPChat-软文机器人/
 │   │   └── history/page.tsx           #   /history → HistoryClient
 │   │
 │   ├── components/                    # React 组件
-│   │   ├── WorkspaceClient.tsx        #   软文工作台主组件 (~634行)
-│   │   ├── ExternalClient.tsx         #   外部文章检测优化 (~568行)
+│   │   ├── WorkspaceClient.tsx        #   软文工作台主组件（含翻译面板）
+│   │   ├── ExternalClient.tsx         #   外部文章检测优化（含翻译面板）
 │   │   ├── HistoryClient.tsx          #   历史记录列表
 │   │   ├── HeaderClient.tsx           #   顶部导航栏
 │   │   ├── ScoreRing.tsx              #   环形分数 + 进度条组件
 │   │   └── ClientProviders.tsx        #   I18n Provider 包装
 │   │
 │   ├── lib/                           # 工具库
-│   │   ├── api.ts                     #   后端 API 封装 (15 个方法)
-│   │   ├── types.ts                   #   TypeScript 全局类型定义
+│   │   ├── api.ts                     #   后端 API 封装 (17 个方法，含 translate/translateExternal)
+│   │   ├── types.ts                   #   TypeScript 全局类型定义 (含 TranslateRequest/Response)
 │   │   ├── aiConfig.ts                #   localStorage AI 配置持久化
 │   │   ├── fallbackConfig.ts          #   后端不可用时的离线降级配置
 │   │   ├── history.ts                 #   localStorage 历史记录管理
@@ -100,19 +101,21 @@ MPChat-软文机器人/
 │   ├── deps.py                        #   依赖注入 (API Key 校验)
 │   ├── utils.py                       #   场景/文风/卖点工具函数
 │   ├── models/
-│   │   ├── requests.py                #   11 个 Pydantic 请求模型
-│   │   └── responses.py               #   6 个 Pydantic 响应模型
+│   │   ├── requests.py                #   12 个 Pydantic 请求模型（含 TranslateRequest）
+│   │   └── responses.py               #   7 个 Pydantic 响应模型（含 TranslateResponse）
 │   └── routers/
 │       ├── config.py                  #   GET  /config/all|providers|scenarios
 │       ├── generate.py                #   POST /generate
 │       ├── analyze.py                 #   POST /analyze/seo|geo
 │       ├── optimize.py                #   POST /optimize, /detect/ai
-│       ├── external.py                #   POST /external/analyze|optimize
+│       ├── external.py                #   POST /external/analyze|optimize|translate
 │       ├── publish.py                 #   POST /publish/{platform} (8 平台)
-│       └── tools.py                   #   POST /schema, /slug, /links, /serp, /images
+│       ├── tools.py                   #   POST /schema, /slug, /links, /serp, /images
+│       └── translate.py               #   POST /translate  ← Phase 1 新增
 │
 ├── core/                              # ===== 业务核心层 =====
 │   ├── generation.py                  #   LLM 调用 + 文章生成 + JSON 解析 (~409行)
+│   ├── translate.py                   #   翻译 Prompt 构建 + translate_article()  ← Phase 1 新增
 │   ├── knowledge.py                   #   知识库加载 + 网页抓取
 │   ├── providers.py                   #   11 个 AI 服务商配置
 │   ├── geo_tools.py                   #   → re-export 根目录 geo_tools
@@ -135,12 +138,17 @@ MPChat-软文机器人/
 ├── requirements.txt                   # Python 依赖
 ├── packages.txt                       # 系统包依赖（空）
 │
-├── PROJECT_CONTEXT.md                 # ← 本文件
-├── TASK_PLAN.md                       # 功能实施计划
+├── tests/                             # ===== 自动化测试 =====  ← Phase 1 新增
+│   ├── test_translate.py              #   core/translate 单元测试 (20 个)
+│   ├── test_translate_models.py       #   Pydantic 模型测试 (14 个)
+│   └── test_translate_router.py       #   FastAPI 路由集成测试 (13 个)
+│
 ├── .cursorrules                       # Cursor 编码规范
 └── docs/
     ├── PRD.md                         # 产品需求文档
-    └── SPEC.md                        # 规格与规范文档
+    ├── SPEC.md                        # 规格与规范文档
+    ├── PROJECT_CONTEXT.md             # ← 本文件
+    └── TASK_PLAN.md                   # 功能实施计划
 ```
 
 ---
@@ -256,8 +264,8 @@ GenerateResponse → 前端渲染 (文章/SEO-GEO/导出/发布/AI检测 5 个 T
 
 | 组件 | 文件 | 职责 |
 |------|------|------|
-| `WorkspaceClient` | `components/WorkspaceClient.tsx` | 软文工作台全流程：配置→生成→预览→SEO/GEO分析→导出→发布→AI检测 |
-| `ExternalClient` | `components/ExternalClient.tsx` | 外部文章：粘贴→分析(检查清单)→5种优化模式→AI检测 |
+| `WorkspaceClient` | `components/WorkspaceClient.tsx` | 软文工作台全流程：配置→生成→预览→SEO/GEO分析→导出→发布→AI检测→**翻译** |
+| `ExternalClient` | `components/ExternalClient.tsx` | 外部文章：粘贴→分析(检查清单)→5种优化模式→AI检测→**翻译** |
 | `HistoryClient` | `components/HistoryClient.tsx` | 历史记录列表，支持加载到工作台 |
 | `HeaderClient` | `components/HeaderClient.tsx` | 顶部导航：Logo + 3 个路由链接 + 中英切换 |
 | `ScoreRing` | `components/ScoreRing.tsx` | 环形分数展示组件 (SVG) |
@@ -269,8 +277,8 @@ GenerateResponse → 前端渲染 (文章/SEO-GEO/导出/发布/AI检测 5 个 T
 
 | 模块 | 文件 | 导出 |
 |------|------|------|
-| API 封装 | `lib/api.ts` | `api` 对象 (15 个方法) |
-| 类型定义 | `lib/types.ts` | 11 个 interface/type |
+| API 封装 | `lib/api.ts` | `api` 对象 (17 个方法，含 `translate`、`translateExternal`) |
+| 类型定义 | `lib/types.ts` | 13 个 interface/type（含 `TranslateRequest`、`TranslateResponse`） |
 | AI 配置 | `lib/aiConfig.ts` | `loadAiConfig()`, `saveAiConfig()` |
 | 降级配置 | `lib/fallbackConfig.ts` | `FALLBACK_CONFIG` 常量 |
 | 历史记录 | `lib/history.ts` | `readHistory()`, `pushHistory()`, `clearHistory()` |
@@ -310,6 +318,13 @@ GenerateResponse → 前端渲染 (文章/SEO-GEO/导出/发布/AI检测 5 个 T
 | POST | `/api/v1/optimize` | `OptimizeRequest` | `OptimizeResponse` |
 | POST | `/api/v1/external/optimize` | `OptimizeRequest` | `OptimizeResponse` |
 | POST | `/api/v1/detect/ai` | `AiDetectRequest` | `{ result: AiDetectResult }` |
+
+### 翻译（Phase 1 新增）
+
+| 方法 | 路径 | 请求 | 响应 |
+|------|------|------|------|
+| POST | `/api/v1/translate` | `TranslateRequest` | `TranslateResponse` |
+| POST | `/api/v1/external/translate` | `TranslateRequest` | `TranslateResponse` |
 
 ### 发布
 
