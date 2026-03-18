@@ -20,6 +20,7 @@ class GenerateRequest(BaseModel):
     use_serp: bool = False
     geo_mode: bool = True
     word_count_target: int = 1200
+    target_title: str = ""
 
 
 class ArticleAnalyzeRequest(BaseModel):
@@ -106,3 +107,35 @@ class TranslateRequest(BaseModel):
     article: str = Field(min_length=1, max_length=100000)
     source_lang: str = Field(min_length=1)
     target_lang: str = Field(min_length=1)
+
+
+class IdeationRequest(BaseModel):
+    provider: str = "openai"
+    model: str = "gpt-4o"
+    api_key: str = Field(min_length=1)
+    base_url: str = ""
+    core_keyword: str = Field(min_length=1, max_length=200)
+    industry: str = ""
+    count: int = Field(default=30, ge=1, le=50)
+    language: str = "auto"
+
+
+class IntercomQARequest(BaseModel):
+    provider: str = "openai"
+    model: str = "gpt-4o"
+    api_key: str = Field(min_length=1)
+    base_url: str = ""
+    feature_description: str = Field(min_length=1, max_length=5000)
+    product_name: str = ""
+    tone: str = "friendly"
+    count: int = Field(default=10, ge=1, le=50)
+    languages: list[str] = ["zh", "zh-TW", "en"]
+
+
+class IntercomUploadRequest(BaseModel):
+    intercom_token: str = Field(min_length=1)
+    collection_id: str = ""
+    title: str = Field(min_length=1)
+    body: str = Field(min_length=1)
+    state: str = "published"
+    locale: str = "zh"

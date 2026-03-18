@@ -63,3 +63,33 @@ class TranslateResponse(BaseModel):
     translated_article: str
     source_lang: str
     target_lang: str
+
+
+class TopicSuggestion(BaseModel):
+    title: str
+    search_intent: str
+    difficulty: str
+    keywords: list[str]
+
+
+class IdeationResponse(BaseModel):
+    topics: list[TopicSuggestion]
+    core_keyword: str
+    count: int
+
+
+class IntercomQAResponse(BaseModel):
+    qa_by_language: dict[str, list[dict]]
+    languages: list[str]
+    count_per_language: dict[str, int]
+
+
+class IntercomCollectionItem(BaseModel):
+    id: str
+    name: str
+    translated_content: dict[str, str] = {}
+
+
+class IntercomCollectionsResponse(BaseModel):
+    collections: list[IntercomCollectionItem]
+    count: int

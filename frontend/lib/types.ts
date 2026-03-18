@@ -43,6 +43,7 @@ export interface GenerateRequest {
   use_serp: boolean;
   geo_mode: boolean;
   word_count_target?: number;
+  target_title?: string;
 }
 
 export interface GenerateResponse {
@@ -131,4 +132,78 @@ export interface TranslateResponse {
   translated_article: string;
   source_lang: string;
   target_lang: string;
+}
+
+export interface TopicSuggestion {
+  title: string;
+  search_intent: string;
+  difficulty: string;
+  keywords: string[];
+}
+
+export interface IdeationRequest {
+  provider: string;
+  model: string;
+  api_key: string;
+  base_url: string;
+  core_keyword: string;
+  industry?: string;
+  count?: number;
+  language?: string;
+}
+
+export interface IdeationResponse {
+  topics: TopicSuggestion[];
+  core_keyword: string;
+  count: number;
+}
+
+export interface QAPair {
+  question: string;
+  answer: string;
+  category: string;
+}
+
+export interface IntercomQARequest {
+  provider: string;
+  model: string;
+  api_key: string;
+  base_url: string;
+  feature_description: string;
+  product_name?: string;
+  tone?: string;
+  count?: number;
+  languages?: string[];
+}
+
+export interface IntercomQAResponse {
+  qa_by_language: Record<string, QAPair[]>;
+  languages: string[];
+  count_per_language: Record<string, number>;
+}
+
+export interface IntercomUploadRequest {
+  intercom_token: string;
+  collection_id?: string;
+  title: string;
+  body: string;
+  state?: string;
+  locale?: string;
+}
+
+export interface IntercomUploadResponse {
+  ok: boolean;
+  article_id: string;
+  url: string;
+}
+
+export interface IntercomCollection {
+  id: string;
+  name: string;
+  translated_content: Record<string, string>;
+}
+
+export interface IntercomCollectionsResponse {
+  collections: IntercomCollection[];
+  count: number;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { marked } from "marked";
@@ -159,6 +160,8 @@ export function WorkspaceClient() {
 
   const [configLoading, setConfigLoading] = useState(true);
   const [configOffline, setConfigOffline] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [ideationTargetTitle, setIdeationTargetTitle] = useState("");
 
   useEffect(() => {
     let retried = false;
@@ -214,6 +217,21 @@ export function WorkspaceClient() {
           setSeo({ score: item.seoScore, breakdown: {}, suggestions: [], details: {} });
           setGeo({ score: item.geoScore, breakdown: {}, suggestions: [], details: {} });
           setForm((prev) => ({ ...prev, keywords: item.keywords || prev.keywords, scenario: item.scenario || prev.scenario }));
+        }
+      }
+    } catch { /* noop */ }
+
+    // Prefill from ideation page
+    try {
+      const prefill = window.localStorage.getItem("mpchat-ideation-prefill");
+      if (prefill) {
+        window.localStorage.removeItem("mpchat-ideation-prefill");
+        const item = JSON.parse(prefill);
+        if (item?.keywords) {
+          setForm((prev) => ({ ...prev, keywords: item.keywords }));
+        }
+        if (item?.title) {
+          setIdeationTargetTitle(item.title);
         }
       }
     } catch { /* noop */ }
@@ -291,13 +309,15 @@ export function WorkspaceClient() {
     return null;
   }
 
-  async function handleGenerate() {
+  async function handleGenerate(overrideTargetTitle?: string) {
     const err = validate();
     if (err) { setError(err); return; }
+    const titleToUse = overrideTargetTitle !== undefined ? overrideTargetTitle : ideationTargetTitle;
     const warmupTimer = setTimeout(() => setShowWarmup(true), 5000);
     try { setIsLoading(true); setError(""); setChangelog([]); setAiDetect(null); setSchemas(null); setSeo(null); setGeo(null); setTranslatedArticle(null);
-      const generated = await api.generate({ ...form, word_count_target: wordCountTarget });
+      const generated = await api.generate({ ...form, word_count_target: wordCountTarget, target_title: titleToUse || undefined });
       setResult(generated);
+      setIdeationTargetTitle("");
       await runAnalyses(generated, form.keywords, form.selling_points);
     } catch (e) { setError(e instanceof Error ? e.message : t("err.requestFailed")); } finally { clearTimeout(warmupTimer); setShowWarmup(false); setIsLoading(false); }
   }
@@ -438,8 +458,14 @@ export function WorkspaceClient() {
                 {isLoading ? `批量中 ${batchProgress}/${batchTotal}` : `批量生成 (${batchScenarios.length})`}
               </button>
             ) : (
-              <button className="primary-button" onClick={handleGenerate} disabled={isLoading || !config}>
-                {isLoading ? t("msg.generating") : t("btn.generate")}
+              <button
+                className="primary-button"
+                onClick={() => handleGenerate()}
+                disabled={isLoading || !config}
+                style={ideationTargetTitle ? { opacity: 0.5 } : undefined}
+                title={ideationTargetTitle ? `使用下方选题 Banner 的「立即生成」按钮，以确保基于目标标题生成` : undefined}
+              >
+                {isLoading ? t("msg.generating") : ideationTargetTitle ? "按场景生成（忽略选题）" : t("btn.generate")}
               </button>
             )}
           </div>
@@ -451,9 +477,15 @@ export function WorkspaceClient() {
           <label><span>Style</span><select value={form.style} onChange={(e) => updateForm("style", e.target.value)}>{Object.keys(config?.article_styles || {}).map((s) => (<option key={s} value={s}>{s}</option>))}</select></label>
           <label><span>Category</span><select value={form.category} onChange={(e) => handleCategoryChange(e.target.value)}>{Object.keys(config?.scenario_categories || {}).map((c) => (<option key={c} value={c}>{c}</option>))}</select></label>
           <label><span>Scenario</span><select value={form.scenario} onChange={(e) => handleScenarioChange(e.target.value)}>{scenarios.map((s) => (<option key={s.label} value={s.label}>{s.label}</option>))}</select></label>
-          <label><span>API Key {selectedProvider?.get_key_url ? <a href={selectedProvider.get_key_url} target="_blank" rel="noreferrer" style={{color:"var(--primary)",fontSize:"0.75rem",marginLeft:4}}>获取</a> : null}</span><input type="password" value={form.api_key} onChange={(e) => updateForm("api_key", e.target.value)} placeholder="必填" /></label>
+          <label><span>API Key {selectedProvider?.get_key_url ? <a href={selectedProvider.get_key_url} target="_blank" rel="noreferrer" style={{color:"var(--primary)",fontSize:"0.75rem",marginLeft:4}}>获取</a> : null}</span><div style={{position:"relative"}}><input type={showApiKey ? "text" : "password"} value={form.api_key} onChange={(e) => updateForm("api_key", e.target.value)} placeholder="必填" style={{paddingRight:40}} /><button type="button" onClick={() => setShowApiKey((v) => !v)} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"var(--muted)",fontSize:"0.85rem",padding:0}} title={showApiKey ? "隐藏" : "查看"}>{showApiKey ? "🙈" : "👁"}</button></div></label>
           <label><span>Base URL</span><input value={form.base_url} onChange={(e) => updateForm("base_url", e.target.value)} /></label>
-          <label className="span-4"><span>Keywords</span><textarea value={form.keywords} onChange={(e) => updateForm("keywords", e.target.value)} rows={2} /></label>
+          <label className="span-4">
+            <span style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>Keywords</span>
+              <Link href="/ideation" style={{ fontSize: "0.75rem", color: "var(--primary)", textDecoration: "none" }}>✦ {t("ideation.shortcut")}</Link>
+            </span>
+            <textarea value={form.keywords} onChange={(e) => updateForm("keywords", e.target.value)} rows={2} />
+          </label>
         </div>
 
         {config?.keyword_presets && config.keyword_presets.length > 0 && (
@@ -509,7 +541,17 @@ export function WorkspaceClient() {
       )}
 
       {configOffline && <div className="error-banner" style={{background:"rgba(255,165,0,0.15)",borderColor:"rgba(255,165,0,0.4)",color:"#ffaa33"}}>使用离线配置，部分场景数据可能不完整。后端连接恢复后请刷新页面。</div>}
-      {error ? <div className="error-banner toast-error" onClick={() => setError("")}><span>{error}</span><span style={{cursor:"pointer",marginLeft:12,opacity:0.6}}>✕</span></div> : null}
+      {ideationTargetTitle && (
+        <div className="error-banner" style={{background:"rgba(99,91,255,0.12)",borderColor:"rgba(99,91,255,0.35)",color:"var(--primary)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+            <span style={{flex:1}}>✦ {t("ideation.targetTitleHint")}: <strong>{ideationTargetTitle}</strong></span>
+            <button className="primary-button" style={{padding:"6px 16px",fontSize:"0.85rem"}} disabled={isLoading || !config} onClick={() => { handleGenerate(ideationTargetTitle); }}>
+              {isLoading ? t("msg.generating") : t("ideation.generateNow")}
+            </button>
+            <button onClick={() => setIdeationTargetTitle("")} style={{background:"none",border:"none",cursor:"pointer",color:"var(--muted)",fontSize:"1rem",padding:0}} title="关闭">✕</button>
+          </div>
+        </div>
+      )}      {error ? <div className="error-banner toast-error" onClick={() => setError("")}><span>{error}</span><span style={{cursor:"pointer",marginLeft:12,opacity:0.6}}>✕</span></div> : null}
       {copyMsg && <div className="error-banner toast-error" style={{background:"rgba(34,197,94,0.15)",borderColor:"rgba(34,197,94,0.3)",color:"#4ade80"}}>{copyMsg}</div>}
 
       {showWarmup && (

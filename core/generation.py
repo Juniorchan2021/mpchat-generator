@@ -170,8 +170,14 @@ def build_user_prompt(
     selling_points_text: str,
     style_name: str,
     keywords: str,
+    target_title: str = "",
 ) -> str:
     keyword_text = keywords.strip() if keywords.strip() else "MPChat, 加密支付, 稳定币"
+    title_instruction = (
+        f"\n- 目标标题（必须严格以此标题为 H1，不得修改）：{target_title.strip()}"
+        if target_title and target_title.strip()
+        else ""
+    )
     return f"""请根据以下参数，生成一篇完整的 MPChat 推广软文和配套 AI 绘画提示词。
 
 【生成参数】
@@ -180,7 +186,7 @@ def build_user_prompt(
 - 目标受众：{audience_tag}
 - 主打卖点：{selling_points_text}
 - 文章文风：{style_name}
-- SEO 核心关键词：{keyword_text}
+- SEO 核心关键词：{keyword_text}{title_instruction}
 
 请严格按照系统提示中规定的 JSON 格式输出，确保 JSON 合法可解析。
 """
@@ -292,12 +298,16 @@ def generate_article(
     provider: str = "",
     api_key: str = "",
     base_url: str = "",
+    target_title: str = "",
 ) -> dict:
     system_prompt = build_system_prompt(
         language, style_instruction, scenario_label, web_content,
         geo_mode=geo_mode, word_count_target=word_count_target,
     )
-    user_prompt = build_user_prompt(language, scenario_label, audience_tag, selling_points_text, style_name, keywords)
+    user_prompt = build_user_prompt(
+        language, scenario_label, audience_tag, selling_points_text,
+        style_name, keywords, target_title=target_title,
+    )
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},

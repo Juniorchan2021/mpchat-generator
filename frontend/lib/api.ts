@@ -4,6 +4,14 @@ import type {
   ConfigData,
   GenerateRequest,
   GenerateResponse,
+  IdeationRequest,
+  IdeationResponse,
+  IntercomCollection,
+  IntercomCollectionsResponse,
+  IntercomQARequest,
+  IntercomQAResponse,
+  IntercomUploadRequest,
+  IntercomUploadResponse,
   OptimizeResponse,
   PublishPayload,
   PublishResponse,
@@ -177,4 +185,27 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }, 120000),
+
+  generateTopics: (payload: IdeationRequest) =>
+    request<IdeationResponse>("/api/v1/ideation/topics", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, 120000),
+
+  generateIntercomQA: (payload: IntercomQARequest) =>
+    request<IntercomQAResponse>("/api/v1/intercom/generate-qa", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, 120000),
+
+  uploadToIntercom: (payload: IntercomUploadRequest) =>
+    request<IntercomUploadResponse>("/api/v1/intercom/upload", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  getIntercomCollections: (token: string): Promise<IntercomCollectionsResponse> => {
+    const params = new URLSearchParams({ token });
+    return request<IntercomCollectionsResponse>(`/api/v1/intercom/collections?${params}`);
+  },
 };

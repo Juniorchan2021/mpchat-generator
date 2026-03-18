@@ -61,6 +61,7 @@ async def create_article(req: GenerateRequest):
                 provider=req.provider,
                 api_key=req.api_key,
                 base_url=req.base_url,
+                target_title=req.target_title,
             )
         )
     except HTTPException:

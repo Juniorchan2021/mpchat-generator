@@ -36,6 +36,12 @@ export default function HeaderClient() {
         <Link href="/history" className={pathname === "/history" ? "active" : ""}>
           {t("nav.history")}
         </Link>
+        <Link href="/ideation" className={pathname === "/ideation" ? "active" : ""}>
+          {t("nav.ideation")}
+        </Link>
+        <Link href="/intercom-qa" className={pathname === "/intercom-qa" ? "active" : ""}>
+          {t("nav.intercomQA")}
+        </Link>
         <button
           className="lang-toggle"
           onClick={() => setLocale(locale === "zh" ? "en" : "zh")}

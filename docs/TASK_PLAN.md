@@ -1,6 +1,6 @@
 # MPChat 软文机器人 — 功能扩展实施计划
 
-> 最后更新：2026-03-18 | Phase 1 已完成（翻译按钮智能化）；Phase 2 已完成（Paragraph 直发 + Medium API 真实发布 + 外部文章发布面板）
+> 最后更新：2026-03-18 | Phase 1 ✅ Phase 2 ✅ Phase 3 ✅（SEO 选题助手，28 个测试）
 
 ---
 
@@ -12,8 +12,8 @@
 |-------|------|--------|---------|---------|------|
 | 1 | 长文多语言翻译 | ★★☆ | 2 | 8 | ✅ 已完成 |
 | 2 | 扩展发布渠道 (Paragraph + Medium) | ★★☆ | 0 | 6 | ✅ 已完成 |
-| 3 | SEO 批量选题助手 | ★★★ | 4 | 6 | ⬜ 待执行 |
-| 4 | Intercom QA 生成 | ★★★ | 4 | 6 | ⬜ 待执行 |
+| 3 | SEO 批量选题助手 | ★★★ | 4 | 6 | ✅ 已完成 |
+| 4 | Intercom QA 生成 | ★★★ | 4 | 6 | ✅ 已完成 |
 
 ---
 
@@ -134,7 +134,7 @@
 
 ---
 
-## Phase 3：SEO 批量选题助手
+## Phase 3：SEO 批量选题助手 ✅
 
 ### 3.1 后端
 
@@ -185,11 +185,14 @@
 
 ### 3.3 验证清单
 
-- [ ] 输入关键词后生成 20-50 个标题建议
-- [ ] 每个标题显示搜索意图、难度、关键词
-- [ ] 点击「使用此标题」能正确跳转到工作台并自动填入
-- [ ] 工作台迷你选题面板正常弹出和关闭
-- [ ] 导航栏新入口样式一致
+- [x] 输入关键词后生成 5-50 个标题建议（滑块控制）
+- [x] 每个标题显示搜索意图、难度、关键词（pill 展示）
+- [x] 点击「使用此标题」通过 localStorage 跳转工作台并自动填入关键词
+- [x] 工作台关键词旁「AI 选题」快捷链接，导航到 /ideation 页面
+- [x] 导航栏新增「选题」入口
+- [x] 后端 28 个测试全部通过（build_ideation_prompt / parse_topics / generate_topics）
+- [x] 前端构建零错误，TypeScript 严格通过
+- [x] i18n 126 keys 中英完全同步
 
 ---
 
@@ -245,11 +248,25 @@
 
 ### 4.3 验证清单
 
-- [ ] 输入功能描述后生成 QA 列表
-- [ ] QA 列表可逐项编辑
-- [ ] 导出 Markdown 和 JSON 格式正确
-- [ ] Intercom 上传成功（需要有效 token）
-- [ ] 上传失败时显示有意义的错误信息
+- [x] 输入功能描述后生成 QA 列表
+- [x] QA 列表可逐项编辑（问题/答案/分类均可修改）
+- [x] 导出 Markdown 和 JSON 格式正确
+- [x] Intercom 上传成功（需要有效 token）
+- [x] 上传失败时显示有意义的错误信息
+- [x] 前端构建零错误，TypeScript 严格模式通过
+- [x] 后端 55 个测试全部通过
+- [x] i18n 中英双语同步
+- [x] 导航栏新增「QA 生成」入口
+
+### Phase 4 问题修复记录
+
+| 问题描述 | 原因 | 修复方案 | 状态 |
+|---------|------|---------|------|
+| 回答框直接显示 HTML 标签（`<p>`, `<strong>`, `<li>` 等），中文运营无法阅读 | 最初 Prompt 要求 LLM 直接输出 HTML 格式回答，运营人员在编辑区看到原始标签 | 将 Prompt 改为要求纯文本（no HTML tags）；上传 Intercom 前调用新增的 `plaintext_to_html()` 函数自动转换（段落→`<p>`，`- / *`→`<ul><li>`，`1.`→`<ol><li>`） | ✅ 已修复 |
+| 只生成一个语言版本，三语言帮助中心需要分别手动触发三次，效率低 | 原始设计每次调用只生成单语言 QA 列表 | `build_qa_generation_prompt()` 新增 `languages` 参数，Prompt 改为要求 LLM 一次输出多语言嵌套 JSON `{"zh": [...], "zh-TW": [...], "en": [...]}`；新增 `parse_qa_result()` 解析多语言结构；`generate_qa_pairs()` 返回类型从 `list[dict]` 改为 `dict[str, list[dict]]` | ✅ 已修复 |
+| 前端仅有单一 QA 列表，三语言混在一起无法区分 | 原始 UI 设计为单语言平铺展示 | 结果区改为三 Tab（简体中文/繁体中文/English），每个 Tab 独立编辑、导出；上传区为三语言分别配置 Collection ID + 独立「全部上传」按钮，并显示上传进度（已上传/总数） | ✅ 已修复 |
+| Intercom 上传不支持语言标识，三语言内容上传后无法区分 locale | 原始 `upload_to_intercom()` 无 `locale` 参数，Intercom API payload 中缺少 `locale` 字段 | `upload_to_intercom()` 新增 `locale` 参数（默认 `"zh"`），上传时自动填入 Intercom API 的 `locale` 字段；`IntercomUploadRequest` 同步新增 `locale` 字段（默认 `"zh"`） | ✅ 已修复 |
+| Collection 板块手动输入 ID，运营不知道自己账号下有哪些 Collection，容易填错 | 原设计使用静态文本输入框，Collection 来源不明、无法验证 | 新增 `fetch_intercom_collections()` 核心函数，调用 `GET /help_center/collections`；新增后端端点 `GET /api/v1/intercom/collections?token=xxx`；前端上传区新增「读取 Collections」按钮，成功后将文字输入框替换为下拉选单，每语言按对应 `translated_content[locale]` 显示名称 | ✅ 已修复 |
 
 ---
 
@@ -287,3 +304,20 @@
 | `frontend/components/ExternalClient.tsx` | 1,2 | 翻译按钮 + 发布面板 |
 | `frontend/components/HeaderClient.tsx` | 3,4 | 导航增加 2 个入口 |
 | `frontend/lib/i18n/zh.json` + `en.json` | 1,2,3,4 | 所有新增文案 |
+
+---
+
+## Phase 3 问题修复记录
+
+| 问题描述 | 原因 | 修复方案 | 状态 |
+|---------|------|---------|------|
+| 选题页：切换服务商后模型无法切换（仍为文本输入框） | `PROVIDER_DEFAULTS` 未包含 `models` 列表，模型字段为 `<input>` 而非 `<select>` | 在 `IdeationClient.tsx` 的 `PROVIDER_DEFAULTS` 中为每个服务商添加 `models[]`，当 models 非空时渲染 `<select>` 下拉 | ✅ 已修复 |
+| 选题页/工作台/外部文章：API Key 输入框为 `type="password"`，无法查看输入是否正确 | 所有 API Key 字段均设置了 `type="password"` 且没有切换按钮 | 在 `IdeationClient.tsx`、`WorkspaceClient.tsx`、`ExternalClient.tsx` 的 API Key 字段旁添加 👁/🙈 切换按钮，控制 `type="text"/"password"` 切换 | ✅ 已修复 |
+| 选题页：选择 Gemini 服务商时，"获取" Key 链接指向错误页面 | `IdeationClient.tsx` 中 Gemini 的 `get_key_url` 未配置，工作台读取的是 `config.json` 中的配置但 Ideation 是本地常量 | 在 `IdeationClient.tsx` 的 `PROVIDER_DEFAULTS` 中为 Gemini 设置正确的 `get_key_url: "https://aistudio.google.com/app/apikey"` | ✅ 已修复 |
+| 输入中文关键词后生成的标题仍为英文 | `core/ideation.py` 的 prompt 硬编码要求"英文博客标题" | 在 `build_ideation_prompt()` 增加 `language` 参数（默认 `"auto"`），`auto` 模式自动检测关键词中文字符决定语言；同步更新 `IdeationRequest` 模型和前端 `IdeationClient.tsx` 添加语言选择器 | ✅ 已修复 |
+| 点击"使用此标题"跳转工作台后，没有明确的"基于此标题生成文章"入口 | 工作台只接收了 `keywords` prefill，没有展示目标标题，也没有快捷生成按钮 | `WorkspaceClient.tsx` 读取 `mpchat-ideation-prefill` 时同时保存 `ideationTargetTitle`，并渲染一条紫色 banner 显示目标标题、内附"立即生成"按钮 | ✅ 已修复 |
+| 离开选题页再返回后，之前生成的选题列表消失 | `IdeationClient.tsx` 的 `topics` 状态只存在于内存，路由跳转后组件销毁 | 新增 `mpchat-ideation-topics` localStorage key，每次 `topics` 更新时同步写入；组件挂载时恢复缓存，并显示"缓存自: xxx关键词"提示 | ✅ 已修复 |
+| 外部文章页：AI 配置中模型字段为纯文本输入框，无法选择 gemini-2.5-pro 等其他模型 | `ExternalClient.tsx` 的 `PROVIDER_DEFAULTS` 类型定义缺少 `models[]` 字段，模型字段使用 `<input>` 渲染 | 为 `PROVIDER_DEFAULTS` 中每个服务商添加 `models[]` 列表，将模型字段改为条件渲染：有 models 时用 `<select>` 下拉，`custom` 保留 `<input>` | ✅ 已修复 |
+| 选题页/外部文章页的 AI 服务商模型列表硬编码在前端，新版本模型（如 Gemini 3.x、Claude 5.x）发布后用户无法选择，且不同页面维护多份重复的 PROVIDER_DEFAULTS | 选题页和外部文章页在开发时各自独立维护了前端常量，与工作台的后端驱动模式不一致 | 删除两个页面的硬编码 `PROVIDER_DEFAULTS`，改为调用 `api.getConfig()` 读取与工作台同源的后端数据；`custom` 服务商（models 为空）自动降级为文本输入框，用户可输入任意模型名；`FALLBACK_CONFIG` 同步更新为离线兜底 | ✅ 已修复 |
+| 各服务商在 `core/providers.py` 和 `fallbackConfig.ts` 中的模型列表已过时（如 Gemini 缺少 2.5-pro，OpenAI 缺少 gpt-4.1/o3，Claude 缺少最新命名） | 模型列表在 Phase 1 开发时手动填写，之后未跟进各厂商的模型迭代 | 更新 `core/providers.py` 和 `fallbackConfig.ts`，补全截至 2026-03 的各服务商主力最新模型（Gemini 2.5-pro/flash、GPT-4.1/o3/o4-mini、Claude opus-4-5/sonnet-4-5、Qwen3 等） | ✅ 已修复 |
+| 从选题页点击「使用此标题」跳转工作台后，点击主配置区「生成文章」按钮生成的是按场景配置的文章，而非基于所选标题的文章；两个生成入口（主按钮 + banner 立即生成）功能不同但视觉上无区分，造成误触 | banner「立即生成」调用 `handleGenerate()` 前会 `setIdeationTargetTitle("")` 清空标题，导致 `target_title` 未传入 LLM；主配置区按钮也调用同一个无参数函数，二者无差异 | 1. `GenerateRequest` 新增 `target_title?: string` 字段；2. `build_user_prompt()` 注入"目标标题（必须严格以此标题为 H1）"指令；3. banner「立即生成」将 `ideationTargetTitle` 作为参数传入 `handleGenerate(title)`，生成完成后自动清空；4. 主配置区按钮在有选题 banner 时显示"按场景生成（忽略选题）"并降低透明度，明确区分两个入口 | ✅ 已修复 |

@@ -7,8 +7,9 @@ import remarkGfm from "remark-gfm";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { loadAiConfig, saveAiConfig, type AiConfig } from "@/lib/aiConfig";
+import { FALLBACK_CONFIG } from "@/lib/fallbackConfig";
 import { detectSourceLang, getTranslateTargets } from "@/lib/translateUtils";
-import type { PublishResponse } from "@/lib/types";
+import type { Provider, PublishResponse } from "@/lib/types";
 
 const EXTERNAL_PLATFORMS = [
   { id: "devto", label: "Dev.to", needsKey: true },
@@ -16,20 +17,6 @@ const EXTERNAL_PLATFORMS = [
   { id: "medium", label: "Medium", needsKey: true },
   { id: "paragraph", label: "Paragraph", needsKey: true },
 ];
-
-const PROVIDER_DEFAULTS: Record<string, { model: string; base_url: string }> = {
-  gemini: { model: "gemini-2.5-flash", base_url: "https://generativelanguage.googleapis.com/v1beta/openai/" },
-  openai: { model: "gpt-4o", base_url: "https://api.openai.com/v1" },
-  anthropic: { model: "claude-sonnet-4-20250514", base_url: "https://api.anthropic.com" },
-  deepseek: { model: "deepseek-chat", base_url: "https://api.deepseek.com/v1" },
-  kimi: { model: "moonshot-v1-128k", base_url: "https://api.moonshot.cn/v1" },
-  groq: { model: "llama-3.3-70b-versatile", base_url: "https://api.groq.com/openai/v1" },
-  together: { model: "meta-llama/Llama-3.3-70B-Instruct-Turbo", base_url: "https://api.together.xyz/v1" },
-  siliconflow: { model: "Qwen/Qwen2.5-72B-Instruct", base_url: "https://api.siliconflow.cn/v1" },
-  zhipu: { model: "glm-4-plus", base_url: "https://open.bigmodel.cn/api/paas/v4" },
-  openrouter: { model: "anthropic/claude-sonnet-4", base_url: "https://openrouter.ai/api/v1" },
-  custom: { model: "", base_url: "" },
-};
 import { ScoreRing } from "@/components/ScoreRing";
 import type { AiDetectResult, OptimizeResponse } from "@/lib/types";
 
@@ -109,6 +96,7 @@ export function ExternalClient() {
   const DEFAULT_GEMINI_KEY = process.env.NEXT_PUBLIC_DEFAULT_GEMINI_KEY || "";
   const [article, setArticle] = useState("");
   const [keywords, setKeywords] = useState("");
+  const [providers, setProviders] = useState<Provider[]>(FALLBACK_CONFIG.providers);
   const [aiCfg, setAiCfg] = useState<AiConfig>({
     provider: "gemini",
     model: "gemini-2.5-flash",
@@ -137,10 +125,15 @@ export function ExternalClient() {
   const [extParagraphKey, setExtParagraphKey] = useState("");
   const [extPublishDraft, setExtPublishDraft] = useState(true);
   const [extPublishResults, setExtPublishResults] = useState<Record<string, { status: string; data?: PublishResponse }>>({});
+  const [showApiKey, setShowApiKey] = useState(false);
 
   const loading = loadingAction !== null;
 
   useEffect(() => {
+    api.getConfig().then((data) => {
+      if (data.providers?.length) setProviders(data.providers);
+    }).catch(() => { /* 保持 fallback */ });
+
     const saved = loadAiConfig();
     if (saved && saved.api_key) setAiCfg(saved);
   }, []);
@@ -162,13 +155,14 @@ export function ExternalClient() {
   }, [aiCfg.provider, aiCfg.model, aiCfg.api_key, aiCfg.base_url]);
 
   const configLabel = useMemo(() => {
-    const providerNames: Record<string, string> = {
-      gemini: "Google Gemini", openai: "OpenAI", anthropic: "Anthropic", deepseek: "DeepSeek",
-      kimi: "Kimi", groq: "Groq", together: "Together AI", siliconflow: "SiliconFlow",
-      zhipu: "Zhipu AI", openrouter: "OpenRouter", custom: "Custom",
-    };
-    return providerNames[aiCfg.provider] || aiCfg.provider;
-  }, [aiCfg.provider]);
+    const found = providers.find((p) => p.id === aiCfg.provider);
+    return found?.label || aiCfg.provider;
+  }, [providers, aiCfg.provider]);
+
+  const currentProvider = useMemo(
+    () => providers.find((p) => p.id === aiCfg.provider),
+    [providers, aiCfg.provider],
+  );
 
   const wordStats = useMemo(() => countWords(article), [article]);
   const kwOccurrences = useMemo(() => countKeywordOccurrences(article, keywords), [article, keywords]);
@@ -470,36 +464,35 @@ export function ExternalClient() {
               <span>{t("form.provider")}</span>
               <select value={aiCfg.provider} onChange={(e) => {
                   const id = e.target.value;
-                  const defaults = PROVIDER_DEFAULTS[id] || { model: "", base_url: "" };
+                  const p = providers.find((x) => x.id === id);
                   const newKey = id === "gemini" ? DEFAULT_GEMINI_KEY : "";
-                  const newCfg = { provider: id, model: defaults.model, base_url: defaults.base_url, api_key: newKey };
+                  const newCfg = { provider: id, model: p?.models?.[0] || "", base_url: p?.base_url || "", api_key: newKey };
                   setAiCfg(newCfg);
                   saveAiConfig(newCfg);
                 }}>
-                {[
-                  { id: "gemini", label: "Google Gemini" },
-                  { id: "openai", label: "OpenAI" },
-                  { id: "anthropic", label: "Anthropic (Claude)" },
-                  { id: "deepseek", label: "DeepSeek" },
-                  { id: "kimi", label: "Kimi" },
-                  { id: "groq", label: "Groq" },
-                  { id: "together", label: "Together AI" },
-                  { id: "siliconflow", label: "SiliconFlow" },
-                  { id: "zhipu", label: "Zhipu AI" },
-                  { id: "openrouter", label: "OpenRouter" },
-                  { id: "custom", label: "Custom" },
-                ].map((p) => (
+                {providers.map((p) => (
                   <option key={p.id} value={p.id}>{p.label}</option>
                 ))}
               </select>
             </label>
             <label>
               <span>{t("form.model")}</span>
-              <input value={aiCfg.model} onChange={(e) => setAiCfg((p) => ({ ...p, model: e.target.value }))} />
+              {(currentProvider?.models ?? []).length > 0 ? (
+                <select value={aiCfg.model} onChange={(e) => setAiCfg((p) => ({ ...p, model: e.target.value }))}>
+                  {(currentProvider?.models ?? []).map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              ) : (
+                <input value={aiCfg.model} onChange={(e) => setAiCfg((p) => ({ ...p, model: e.target.value }))} placeholder="输入模型名称（如 gemini-3.1-pro）" />
+              )}
             </label>
             <label>
               <span>{t("form.apiKey")}</span>
-              <input type="password" value={aiCfg.api_key} onChange={(e) => setAiCfg((p) => ({ ...p, api_key: e.target.value }))} />
+              <div style={{position:"relative"}}>
+                <input type={showApiKey ? "text" : "password"} value={aiCfg.api_key} onChange={(e) => setAiCfg((p) => ({ ...p, api_key: e.target.value }))} style={{paddingRight:40}} />
+                <button type="button" onClick={() => setShowApiKey((v) => !v)} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"var(--muted)",fontSize:"0.85rem",padding:0}} title={showApiKey ? "隐藏" : "查看"}>{showApiKey ? "🙈" : "👁"}</button>
+              </div>
             </label>
             <label className="span-4">
               <span>{t("form.baseUrl")}</span>

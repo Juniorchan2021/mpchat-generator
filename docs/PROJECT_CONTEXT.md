@@ -1,6 +1,6 @@
 # MPChat 软文机器人 — 项目架构总结
 
-> 最后更新：2026-03-18 | v5.3 — Phase 2 扩展发布渠道：Paragraph 直发 + Medium API 真实发布
+> 最后更新：2026-03-18 | v5.6 — Phase 4 优化：三语言同时生成（简中/繁中/英文）+ 纯文本回答自动转 HTML + 分语言 Collection 上传
 
 ---
 
@@ -71,7 +71,8 @@ MPChat-软文机器人/
 │   │   ├── page.tsx                   #   / → WorkspaceClient
 │   │   ├── globals.css                #   全局样式 + CSS 变量 (~880行)
 │   │   ├── external/page.tsx          #   /external → ExternalClient
-│   │   └── history/page.tsx           #   /history → HistoryClient
+│   │   ├── history/page.tsx           #   /history → HistoryClient
+│   │   └── ideation/page.tsx          #   /ideation → IdeationClient  ← Phase 3 新增
 │   │
 │   ├── components/                    # React 组件
 │   │   ├── WorkspaceClient.tsx        #   软文工作台主组件（含翻译面板）
@@ -113,13 +114,17 @@ MPChat-软文机器人/
 │       ├── external.py                #   POST /external/analyze|optimize|translate
 │       ├── publish.py                 #   POST /publish/{platform} (8 平台)
 │       ├── tools.py                   #   POST /schema, /slug, /links, /serp, /images
-│       └── translate.py               #   POST /translate  ← Phase 1 新增
+│       ├── translate.py               #   POST /translate  ← Phase 1 新增
+│       └── ideation.py                #   POST /ideation/topics  ← Phase 3 新增
+│       └── intercom_qa.py             #   GET /intercom/collections + POST /intercom/generate-qa + /upload  ← Phase 4 新增
 │
 ├── core/                              # ===== 业务核心层 =====
 │   ├── generation.py                  #   LLM 调用 + 文章生成 + JSON 解析 (~409行)
 │   ├── translate.py                   #   翻译 Prompt 构建 + translate_article()  ← Phase 1 新增
+│   ├── ideation.py                    #   选题 Prompt 构建 + parse_topics() + generate_topics()  ← Phase 3 新增
+│   ├── intercom_qa.py                 #   QA Prompt 构建 + parse_qa_result()（多语言）+ plaintext_to_html() + generate_qa_pairs()（返回 dict[lang, list]）+ upload_to_intercom()（含 locale）+ fetch_intercom_collections()（从 Intercom API 获取 Collection 列表）← Phase 4 新增/优化
 │   ├── knowledge.py                   #   知识库加载 + 网页抓取
-│   ├── providers.py                   #   11 个 AI 服务商配置
+│   ├── providers.py                   #   11 个 AI 服务商配置（唯一数据源，三个页面均通过 /api/v1/config/all 读取）
 │   ├── geo_tools.py                   #   → re-export 根目录 geo_tools
 │   ├── seo_tools.py                   #   → re-export 根目录 seo_tools
 │   ├── image_client.py                #   → re-export 根目录 image_client
@@ -229,7 +234,7 @@ api.generate(payload)  →  POST /api/v1/generate
 generate_article()
        │
        ├─ build_system_prompt()  → 知识库 + SEO/GEO 规范 + 场景上下文
-       ├─ build_user_prompt()    → 用户参数
+       ├─ build_user_prompt()    → 用户参数（含可选 target_title：注入"必须以此为 H1"指令）
        ├─ call_llm()             → Gemini/OpenAI/Anthropic
        ├─ robust_parse()         → JSON 容错解析
        │
@@ -272,6 +277,8 @@ GenerateResponse → 前端渲染 (文章/SEO-GEO/导出/发布/AI检测 5 个 T
 | `HeaderClient` | `components/HeaderClient.tsx` | 顶部导航：Logo + 3 个路由链接 + 中英切换 |
 | `ScoreRing` | `components/ScoreRing.tsx` | 环形分数展示组件 (SVG) |
 | `BreakdownBar` | `components/ScoreRing.tsx` | 进度条组件 |
+| `IdeationClient` | `components/IdeationClient.tsx` | SEO 选题助手：关键词→生成选题→使用标题跳转工作台 ← Phase 3 新增 |
+| `IntercomQAClient` | `components/IntercomQAClient.tsx` | QA 帮助中心：功能描述→一次生成简中/繁中/英文三版→三 Tab 编辑→纯文本自动转 HTML→读取 Intercom Collections（下拉选单）→分语言上传 Intercom ← Phase 4 新增/优化 |
 | `ClientProviders` | `components/ClientProviders.tsx` | I18n Context Provider 包装 |
 | `CheckItem` | `components/ExternalClient.tsx` (内联) | 检查项组件 (pass/fail 图标 + 说明) |
 
@@ -282,7 +289,7 @@ GenerateResponse → 前端渲染 (文章/SEO-GEO/导出/发布/AI检测 5 个 T
 | API 封装 | `lib/api.ts` | `api` 对象 (17 个方法，含 `translate`、`translateExternal`) |
 | 类型定义 | `lib/types.ts` | 13 个 interface/type（含 `TranslateRequest`、`TranslateResponse`） |
 | AI 配置 | `lib/aiConfig.ts` | `loadAiConfig()`, `saveAiConfig()` |
-| 降级配置 | `lib/fallbackConfig.ts` | `FALLBACK_CONFIG` 常量 |
+| 降级配置 | `lib/fallbackConfig.ts` | `FALLBACK_CONFIG` 常量（与 `core/providers.py` 保持同步，后端不可用时的离线兜底） |
 | 历史记录 | `lib/history.ts` | `readHistory()`, `pushHistory()`, `clearHistory()` |
 | 国际化 | `lib/i18n/index.tsx` | `I18nProvider`, `useI18n()` |
 
@@ -352,6 +359,20 @@ GenerateResponse → 前端渲染 (文章/SEO-GEO/导出/发布/AI检测 5 个 T
 | POST | `/api/v1/serp/analyze` | `SerpAnalyzeRequest` | SERP 分析结果 |
 | POST | `/api/v1/images/search` | `ImageSearchRequest` | `{ images }` |
 
+### 选题（Phase 3 新增）
+
+| 方法 | 路径 | 请求 | 响应 |
+|------|------|------|------|
+| POST | `/api/v1/ideation/topics` | `IdeationRequest` | `IdeationResponse` |
+
+### Intercom QA（Phase 4 新增）
+
+| 方法 | 路径 | 请求 | 响应 |
+|------|------|------|------|
+| POST | `/api/v1/intercom/generate-qa` | `IntercomQARequest`（含 `languages` 字段） | `IntercomQAResponse`（`qa_by_language: dict[lang, list]`） |
+| POST | `/api/v1/intercom/upload` | `IntercomUploadRequest`（含 `locale` 字段） | `{ ok, article_id, url }` |
+| GET | `/api/v1/intercom/collections?token=xxx` | Query param: `token` | `IntercomCollectionsResponse`（`collections: [{id, name, translated_content}]`） |
+
 ---
 
 ## 8. 环境变量
@@ -381,6 +402,7 @@ GenerateResponse → 前端渲染 (文章/SEO-GEO/导出/发布/AI检测 5 个 T
 - **组件级状态**：`useState` 管理表单数据、生成结果、loading 状态
 - **持久化**：`localStorage` 存储 AI 配置 (`mpchat-ai-config`) 和历史记录 (`mpchat-history`)
 - **跨页面通信**：历史记录加载到工作台通过 `localStorage` 的 `mpchat-load-workspace` key
+- **选题→工作台跨页面通信**：选题页「使用此标题」写入 `mpchat-ideation-prefill`（含 `keywords` + `title`），工作台读取后展示紫色 banner，「立即生成」按钮将 `title` 作为 `target_title` 注入 LLM Prompt，确保 H1 与选题标题一致；`mpchat-ideation-topics` 缓存本次选题列表
 - **国际化**：React Context (`I18nProvider`) + `localStorage` (`mpchat-locale`)
 
 ---
