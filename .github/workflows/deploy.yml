@@ -50,10 +50,9 @@ jobs:
   deploy-backend:
     name: Deploy Backend (SSH)
     runs-on: ubuntu-latest
-    # 仅当 SSH_HOST secret 存在时才执行后端部署
-    # 若暂未配置服务器，此 Job 会跳过（secrets 为空时 SSH Action 会失败，
-    # 用 if 条件保护，避免阻断整个流水线）
-    if: ${{ secrets.SSH_HOST != '' }}
+    # 通过 repository variable DEPLOY_BACKEND 控制是否执行后端部署
+    # 在 GitHub → Settings → Variables → Actions 中设置 DEPLOY_BACKEND=true 即可启用
+    if: vars.DEPLOY_BACKEND == 'true'
 
     env:
       PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
