@@ -8,6 +8,7 @@ class ProviderResponse(BaseModel):
     models: list[str]
     key_prefix: str
     get_key_url: str
+    sdk: str | None = None
 
 
 class ConfigResponse(BaseModel):

@@ -1,13 +1,14 @@
 import asyncio
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from api.deps import verify_api_key
 from api.models.requests import TranslateRequest
 from api.models.responses import TranslateResponse
 from core.translate import translate_article
 
-router = APIRouter(prefix="/api/v1", tags=["translate"])
+router = APIRouter(prefix="/api/v1", tags=["translate"], dependencies=[Depends(verify_api_key)])
 logger = logging.getLogger(__name__)
 
 

@@ -1,5 +1,4 @@
 import type {
-  AiDetectResult,
   AnalyzeResponse,
   ConfigData,
   GenerateRequest,
@@ -137,7 +136,7 @@ export const api = {
     article: string;
     provider?: string;
   }) =>
-    request<{ result: AiDetectResult }>("/api/v1/detect/ai", {
+    request<{ result: unknown }>("/api/v1/detect/ai", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

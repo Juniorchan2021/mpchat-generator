@@ -1,15 +1,16 @@
 import asyncio
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from api.deps import verify_api_key
 from api.models.requests import IntercomQARequest, IntercomUploadRequest
 from api.models.responses import IntercomCollectionItem, IntercomCollectionsResponse, IntercomQAResponse
 from core.intercom_qa import fetch_intercom_collections, generate_qa_pairs, upload_to_intercom
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/intercom", tags=["intercom"])
+router = APIRouter(prefix="/api/v1/intercom", tags=["intercom"], dependencies=[Depends(verify_api_key)])
 
 
 @router.get("/collections", response_model=IntercomCollectionsResponse)

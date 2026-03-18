@@ -55,6 +55,10 @@ jobs:
     # 用 if 条件保护，避免阻断整个流水线）
     if: ${{ secrets.SSH_HOST != '' }}
 
+    env:
+      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
@@ -63,6 +67,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
+          envs: PIXABAY_API_KEY,PEXELS_API_KEY
           script: |
             set -e
             # 进入项目目录（按实际路径修改）
@@ -70,6 +75,18 @@ jobs:
 
             # 拉取最新代码
             git pull origin main
+
+            # 注入图片 API Key 到服务器 .env（若已存在则更新，否则追加）
+            update_env() {
+              local key="$1" val="$2"
+              if grep -q "^${key}=" .env 2>/dev/null; then
+                sed -i "s|^${key}=.*|${key}=${val}|" .env
+              else
+                echo "${key}=${val}" >> .env
+              fi
+            }
+            update_env "PIXABAY_API_KEY" "$PIXABAY_API_KEY"
+            update_env "PEXELS_API_KEY" "$PEXELS_API_KEY"
 
             # 安装/更新 Python 依赖
             pip3 install -r requirements.txt --quiet

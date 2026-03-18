@@ -3,8 +3,9 @@ import logging
 import os
 from functools import partial
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from api.deps import verify_api_key
 from api.models.requests import GenerateRequest
 from api.models.responses import GenerateResponse
 from api.utils import locate_scenario, selling_points_text, style_to_instruction
@@ -14,7 +15,7 @@ from core.knowledge import fetch_web_knowledge
 from core.seo_tools import generate_slug, reading_stats
 from core.serp_analyzer import analyze_serp, serp_to_prompt_context
 
-router = APIRouter(prefix="/api/v1", tags=["generate"])
+router = APIRouter(prefix="/api/v1", tags=["generate"], dependencies=[Depends(verify_api_key)])
 logger = logging.getLogger(__name__)
 
 
@@ -79,8 +80,8 @@ async def create_article(req: GenerateRequest):
             fetched = await asyncio.to_thread(
                 partial(
                     fetch_images_for_article,
-                    pixabay_key=os.getenv("PIXABAY_API_KEY", "46561407-37c6214d0e52dffc32a430eb3"),
-                    pexels_key=os.getenv("PEXELS_API_KEY", "YszqWzFI3WsjAq1gxox3BHOTfD3bOLlFmQZBoap418G6YYVaxhWC1HZz"),
+                    pixabay_key=os.getenv("PIXABAY_API_KEY", ""),
+                    pexels_key=os.getenv("PEXELS_API_KEY", ""),
                     scenario_terms=scenario.get("pixabay_terms", []),
                     ai_terms=result.get("image_search_terms", []),
                     article_title=title,

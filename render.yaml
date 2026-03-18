@@ -9,3 +9,7 @@ services:
         value: "3.11"
       - key: PORT
         value: "8000"
+      - key: PIXABAY_API_KEY
+        sync: false
+      - key: PEXELS_API_KEY
+        sync: false

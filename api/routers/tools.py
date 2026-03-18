@@ -1,27 +1,31 @@
 import asyncio
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from api.deps import verify_api_key
 from api.models.requests import ImageSearchRequest, LinksRequest, SchemaRequest, SerpAnalyzeRequest, SlugRequest
 from core.geo_tools import generate_faq_schema
 from core.image_client import fetch_images_for_article
 from core.seo_tools import generate_internal_links, generate_schema, generate_slug
 from core.serp_analyzer import analyze_serp
 
-router = APIRouter(prefix="/api/v1", tags=["tools"])
+router = APIRouter(prefix="/api/v1", tags=["tools"], dependencies=[Depends(verify_api_key)])
 
 
 @router.post("/schema")
 async def create_schema(req: SchemaRequest):
-    article_schema = generate_schema(
-        title=req.title,
-        description=req.description,
-        author=req.author,
-        date=req.date,
-        image_url=req.image_url,
-        article_url=req.article_url,
-    )
-    faq_schema = generate_faq_schema(req.faq_pairs)
+    try:
+        article_schema = generate_schema(
+            title=req.title,
+            description=req.description,
+            author=req.author,
+            date=req.date,
+            image_url=req.image_url,
+            article_url=req.article_url,
+        )
+        faq_schema = generate_faq_schema(req.faq_pairs)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Schema 生成失败: {type(e).__name__}: {e}")
     return {
         "article_schema": article_schema,
         "faq_schema": faq_schema,
@@ -30,12 +34,18 @@ async def create_schema(req: SchemaRequest):
 
 @router.post("/slug")
 async def create_slug(req: SlugRequest):
-    return {"slug": generate_slug(req.title)}
+    try:
+        return {"slug": generate_slug(req.title)}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Slug 生成失败: {type(e).__name__}: {e}")
 
 
 @router.post("/links")
 async def create_links(req: LinksRequest):
-    return {"links": generate_internal_links(req.selling_points)}
+    try:
+        return {"links": generate_internal_links(req.selling_points)}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"内链生成失败: {type(e).__name__}: {e}")
 
 
 @router.post("/serp/analyze")

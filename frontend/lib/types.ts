@@ -115,6 +115,7 @@ export interface PublishResponse {
   preview?: string;
   url?: string;
   id?: string | number;
+  error?: string;
   [key: string]: unknown;
 }
 

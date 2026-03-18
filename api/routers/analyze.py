@@ -1,16 +1,20 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 
+from api.deps import verify_api_key
 from api.models.requests import ArticleAnalyzeRequest
 from api.models.responses import AnalyzeResponse
 from core.geo_tools import geo_score
 from core.seo_tools import reading_stats
 
-router = APIRouter(prefix="/api/v1/analyze", tags=["analyze"])
+router = APIRouter(prefix="/api/v1/analyze", tags=["analyze"], dependencies=[Depends(verify_api_key)])
 
 
 @router.post("/seo", response_model=AnalyzeResponse)
 async def analyze_seo(req: ArticleAnalyzeRequest):
-    stats = reading_stats(req.article, req.keywords)
+    try:
+        stats = reading_stats(req.article, req.keywords)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"SEO 分析失败: {type(e).__name__}: {e}")
     suggestions: list[str] = []
     if stats.get("h1_count", 0) < 1:
         suggestions.append("补充 1 个 H1 标题。")
@@ -38,7 +42,10 @@ async def analyze_seo(req: ArticleAnalyzeRequest):
 
 @router.post("/geo", response_model=AnalyzeResponse)
 async def analyze_geo(req: ArticleAnalyzeRequest):
-    result = geo_score(req.article, req.faq_pairs)
+    try:
+        result = geo_score(req.article, req.faq_pairs)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"GEO 分析失败: {type(e).__name__}: {e}")
     return AnalyzeResponse(
         score=result.get("score", 0),
         breakdown=result.get("details", {}),

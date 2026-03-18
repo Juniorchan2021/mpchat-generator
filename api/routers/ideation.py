@@ -1,15 +1,16 @@
 import asyncio
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from api.deps import verify_api_key
 from api.models.requests import IdeationRequest
 from api.models.responses import IdeationResponse, TopicSuggestion
 from core.ideation import generate_topics
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/ideation", tags=["ideation"])
+router = APIRouter(prefix="/api/v1/ideation", tags=["ideation"], dependencies=[Depends(verify_api_key)])
 
 
 @router.post("/topics", response_model=IdeationResponse)
