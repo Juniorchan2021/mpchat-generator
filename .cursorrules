@@ -1,5 +1,12 @@
 # MPChat 软文机器人 — 项目规则
 
+## 部署地址（重要）
+
+- 前端: `https://mpchat-ui.pages.dev` (Cloudflare Pages, 通过 GitHub Actions 自动部署)
+- 后端: `https://mpchat-api.onrender.com` (Render 免费方案, 连接 GitHub 自动部署)
+- GitHub Secret `NEXT_PUBLIC_API_URL` 必须指向 `https://mpchat-api.onrender.com`，绝不能用 localhost
+- Cloudflare API Token 存储在 GitHub Secret `CLOUDFLARE_API_TOKEN` 中
+
 ## 技术栈
 
 - 前端: Next.js 16 + React 19 + TypeScript (strict) + Tailwind CSS 4, 静态导出, 部署 Cloudflare Pages
