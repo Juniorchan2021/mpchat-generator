@@ -1,19 +1,22 @@
 """
-MPChat v4.1 — Multi-source image client
+MPChat v4.2 — Multi-source image client
 Tier 1: Pixabay (primary, API search with random page offset)
 Tier 2: Pexels (secondary, free 200 req/hr, random page offset)
-Tier 3: Placewise CDN (URL-based fallback, no API key)
+Tier 3: LoremFlickr (URL-based fallback, no API key)
 
 Randomization: each call picks a random page (1-5) so repeated
 generation with the same scenario returns different images.
 """
 
+import logging
 import random
 import requests
 
+logger = logging.getLogger(__name__)
+
 PIXABAY_API_URL = "https://pixabay.com/api/"
 PEXELS_API_URL = "https://api.pexels.com/v1/search"
-PLACEWISE_CDN = "https://img.placewise.io"
+LOREMFLICKR_BASE = "https://loremflickr.com"
 
 
 # ── Tier 1: Pixabay (primary) ───────────────────────────────────────────────
@@ -43,10 +46,13 @@ def search_pixabay(
         r = requests.get(PIXABAY_API_URL, params=params, timeout=10)
         r.raise_for_status()
         data = r.json()
-    except Exception:
+    except Exception as exc:
+        logger.warning("Pixabay search failed for query=%r: %s", query, exc)
         return []
 
     hits = data.get("hits", [])
+    if not hits:
+        logger.info("Pixabay returned 0 hits for query=%r (page=%d)", query, page)
     if hits:
         random.shuffle(hits)
 
@@ -85,10 +91,13 @@ def search_pexels(
         r = requests.get(PEXELS_API_URL, headers=headers, params=params, timeout=10)
         r.raise_for_status()
         data = r.json()
-    except Exception:
+    except Exception as exc:
+        logger.warning("Pexels search failed for query=%r: %s", query, exc)
         return []
 
     photos = data.get("photos", [])
+    if not photos:
+        logger.info("Pexels returned 0 photos for query=%r (page=%d)", query, page)
     if photos:
         random.shuffle(photos)
 
@@ -106,24 +115,25 @@ def search_pexels(
     return [r for r in results if r["url"]]
 
 
-# ── Tier 3: Placewise CDN (URL-based, no API key) ───────────────────────────
+# ── Tier 3: LoremFlickr (URL-based fallback, no API key) ─────────────────────
 
-def build_placewise_url(query: str, width: int = 800, height: int = 500) -> str:
-    slug = query.strip().lower().replace(" ", "-")[:80]
-    return f"{PLACEWISE_CDN}/{width}x{height}-{slug}"
+def build_fallback_url(query: str, width: int = 800, height: int = 500) -> str:
+    keywords = query.strip().lower().replace(" ", ",")[:80]
+    return f"{LOREMFLICKR_BASE}/{width}/{height}/{keywords}"
 
 
-def build_placewise_images(queries: list[str], count: int = 4) -> list[dict]:
+def build_fallback_images(queries: list[str], count: int = 4) -> list[dict]:
+    logger.info("Falling back to LoremFlickr for %d queries", min(len(queries), count))
     results = []
     for q in queries[:count]:
-        url = build_placewise_url(q)
+        url = build_fallback_url(q)
         results.append({
             "url": url,
             "preview_url": url,
             "alt_text": q,
-            "photographer": "Placewise CDN",
-            "page_url": "https://placewise.io",
-            "source": "Placewise",
+            "photographer": "LoremFlickr",
+            "page_url": "https://loremflickr.com",
+            "source": "LoremFlickr",
             "query": q,
         })
     return results
@@ -182,6 +192,8 @@ def fetch_images_for_article(
         return []
 
     all_images: list[dict] = []
+    logger.info("Image search: %d queries, pixabay_key=%s, pexels_key=%s",
+                len(queries), bool(pixabay_key), bool(pexels_key))
 
     # Tier 1: Pixabay
     if pixabay_key:
@@ -202,9 +214,9 @@ def fetch_images_for_article(
                 img["query"] = q
             all_images.extend(imgs)
 
-    # Tier 3: Placewise CDN (if both APIs failed)
+    # Tier 3: LoremFlickr (if both APIs failed)
     if not all_images:
-        all_images = build_placewise_images(queries, count=4)
+        all_images = build_fallback_images(queries, count=4)
 
     # Deduplicate by URL
     seen_urls: set[str] = set()
