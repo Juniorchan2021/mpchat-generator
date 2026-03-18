@@ -11,6 +11,9 @@ jobs:
   deploy-frontend:
     name: Build & Deploy Frontend (Cloudflare Pages)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
 
     steps:
       - name: Checkout code
