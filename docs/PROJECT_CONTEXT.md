@@ -1,6 +1,6 @@
 # MPChat 软文机器人 — 项目架构总结
 
-> 最后更新：2026-03-18 | v5.6 — Phase 4 优化：三语言同时生成（简中/繁中/英文）+ 纯文本回答自动转 HTML + 分语言 Collection 上传
+> 最后更新：2026-03-18 | v5.7 — 安全审计修复：API 认证全量挂载 + 错误处理补全 + 类型一致性 + 图片 Key 环境变量化
 
 ---
 
@@ -105,15 +105,15 @@ MPChat-软文机器人/
 │   ├── utils.py                       #   场景/文风/卖点工具函数
 │   ├── models/
 │   │   ├── requests.py                #   12 个 Pydantic 请求模型（含 TranslateRequest）；PublishRequest 含 medium_token + paragraph_key ← Phase 2
-│   │   └── responses.py               #   7 个 Pydantic 响应模型（含 TranslateResponse）
+│   │   └── responses.py               #   8 个 Pydantic 响应模型（含 TranslateResponse）；ProviderResponse 含 sdk?: str ← 审计补全
 │   └── routers/
-│       ├── config.py                  #   GET  /config/all|providers|scenarios
-│       ├── generate.py                #   POST /generate
-│       ├── analyze.py                 #   POST /analyze/seo|geo
-│       ├── optimize.py                #   POST /optimize, /detect/ai
-│       ├── external.py                #   POST /external/analyze|optimize|translate
-│       ├── publish.py                 #   POST /publish/{platform} (8 平台)
-│       ├── tools.py                   #   POST /schema, /slug, /links, /serp, /images
+│       ├── config.py                  #   GET  /config/all|providers|scenarios（全路由含 verify_api_key + try/except ← 审计修复）
+│       ├── generate.py                #   POST /generate（verify_api_key ← 审计修复）
+│       ├── analyze.py                 #   POST /analyze/seo|geo（try/except ← 审计修复）
+│       ├── optimize.py                #   POST /optimize, /detect/ai（try/except ← 审计修复）
+│       ├── external.py                #   POST /external/analyze|optimize|translate（try/except ← 审计修复）
+│       ├── publish.py                 #   POST /publish/{platform} (8 平台)（第三方直发路由 try/except ← 审计修复）
+│       ├── tools.py                   #   POST /schema, /slug, /links, /serp, /images（try/except ← 审计修复）
 │       ├── translate.py               #   POST /translate  ← Phase 1 新增
 │       └── ideation.py                #   POST /ideation/topics  ← Phase 3 新增
 │       └── intercom_qa.py             #   GET /intercom/collections + POST /intercom/generate-qa + /upload  ← Phase 4 新增
@@ -326,7 +326,7 @@ GenerateResponse → 前端渲染 (文章/SEO-GEO/导出/发布/AI检测 5 个 T
 |------|------|------|------|
 | POST | `/api/v1/optimize` | `OptimizeRequest` | `OptimizeResponse` |
 | POST | `/api/v1/external/optimize` | `OptimizeRequest` | `OptimizeResponse` |
-| POST | `/api/v1/detect/ai` | `AiDetectRequest` | `{ result: AiDetectResult }` |
+| POST | `/api/v1/detect/ai` | `AiDetectRequest` | `{ result: string }`（前端 `parseAiDetectResult()` 解析为结构化 `AiDetectResult`） |
 
 ### 翻译（Phase 1 新增）
 
@@ -382,15 +382,19 @@ GenerateResponse → 前端渲染 (文章/SEO-GEO/导出/发布/AI检测 5 个 T
 | `OPENAI_API_KEY` | 是 | 默认 LLM API Key（目前使用 Gemini） |
 | `OPENAI_BASE_URL` | 是 | LLM API Base URL |
 | `OPENAI_MODEL` | 否 | 默认模型名 |
-| `PIXABAY_API_KEY` | 否 | Pixabay 图片搜索 |
-| `PEXELS_API_KEY` | 否 | Pexels 图片搜索 |
+| `PIXABAY_API_KEY` | 否 | Pixabay 图片搜索（本地写 .env，生产通过 GitHub Actions CI/CD 自动注入服务器） |
+| `PEXELS_API_KEY` | 否 | Pexels 图片搜索（同上） |
 | `DEVTO_API_KEY` | 否 | Dev.to 发布 |
 | `HASHNODE_TOKEN` | 否 | Hashnode 发布 |
 | `HASHNODE_PUB_ID` | 否 | Hashnode Publication ID |
-| `MPCHAT_API_KEY` | 否 | API 接口保护 |
-| `CORS_ALLOW_ORIGINS` | 否 | 跨域允许来源 |
+| `MEDIUM_TOKEN` | 否 | Medium 发布（有则 API 直发，无则格式预览） |
+| `PARAGRAPH_API_KEY` | 否 | Paragraph.xyz 发布 |
+| `INTERCOM_TOKEN` | 否 | Intercom 帮助中心上传 |
+| `MPCHAT_API_KEY` | 否 | API 接口保护（全部 10 个路由已挂载 `verify_api_key`） |
+| `CORS_ALLOW_ORIGINS` | 否 | 跨域允许来源（逗号分隔） |
+| `LOG_LEVEL` | 否 | 后端日志级别（默认 INFO） |
 | `NEXT_PUBLIC_API_URL` | 是 | 前端连接后端的 URL |
-| `NEXT_PUBLIC_API_KEY` | 否 | 前端 API Key |
+| `NEXT_PUBLIC_API_KEY` | 否 | 前端 API Key（对应 MPCHAT_API_KEY） |
 | `NEXT_PUBLIC_DEFAULT_GEMINI_KEY` | 否 | 前端默认 Gemini Key（不提交 Git） |
 
 ---
@@ -414,3 +418,21 @@ GenerateResponse → 前端渲染 (文章/SEO-GEO/导出/发布/AI检测 5 个 T
 3. **JSON 容错解析**：`robust_parse()` 实现了多层容错（标准 JSON → 修复尾逗号 → 换行符转义 → 正则提取字段），应对不同 LLM 输出格式差异。
 4. **SEO/GEO 评分是本地计算**：`reading_stats()` 和 `geo_score()` 是纯 Python 正则匹配，不依赖外部 API，执行速度快。
 5. **前端静态导出**：`output: "export"` 意味着无 SSR，所有组件必须标记 `"use client"`，API 调用在客户端完成。
+
+---
+
+## 11. 安全审计修复记录（v5.7）
+
+> 执行时间：2026-03-18
+
+| 问题 | 修复方式 | 涉及文件 |
+|------|----------|----------|
+| Pixabay/Pexels API Key 硬编码在源码 | 移除默认值，写入本地 `.env`；生产环境通过 GitHub Actions `envs` 参数自动注入服务器 | `generate.py`, `.env`, `deploy.yml` |
+| `verify_api_key` 已实现但所有路由未挂载 | 全部 10 个 router 添加 `dependencies=[Depends(verify_api_key)]` | 所有 `api/routers/*.py` |
+| `AiDetectResult` 前端期望结构体，后端返回字符串 | `api.ts` 中 `detectAi` 返回类型改为 `{ result: unknown }`，前端 `parseAiDetectResult()` 负责解析 | `frontend/lib/api.ts` |
+| `publish.py` 4 个第三方直发路由无错误处理 | 包裹 `try/except` + 502 | `api/routers/publish.py` |
+| `analyze/config/tools/optimize/external` 部分路由无错误处理 | 补全 `try/except` + 502 | 对应路由文件 |
+| `.env.example` 缺失 5 个变量 | 补充 `LOG_LEVEL`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_API_KEY`, `NEXT_PUBLIC_DEFAULT_GEMINI_KEY`, 前端变量说明 | `.env.example` |
+| `Provider.sdk` 字段前后端不同步 | 后端 `ProviderResponse` 新增 `sdk: str \| None = None` | `api/models/responses.py` |
+| `PublishResponse.error` 前端未声明 | 前端 `PublishResponse` 接口新增 `error?: string` | `frontend/lib/types.ts` |
+| `render.yaml` 未声明图片 Key 变量 | 新增 `sync: false` 声明 | `render.yaml` |
