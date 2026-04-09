@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { loadAiConfig, saveAiConfig, type AiConfig } from "@/lib/aiConfig";
+import { loadAiConfig, saveAiConfig, getDefaultKey, type AiConfig } from "@/lib/aiConfig";
 import { FALLBACK_CONFIG } from "@/lib/fallbackConfig";
 import type { Provider, TopicSuggestion } from "@/lib/types";
 
@@ -35,8 +35,7 @@ const LANGUAGE_OPTIONS = [
 export function IdeationClient() {
   const { t } = useI18n();
   const router = useRouter();
-  const DEFAULT_GEMINI_KEY = process.env.NEXT_PUBLIC_DEFAULT_GEMINI_KEY || "";
-  const DEFAULT_KIMI_KEY = process.env.NEXT_PUBLIC_DEFAULT_KIMI_KEY || "";
+  
 
   // 从后端 config 加载 providers（与工作台同源）
   const [providers, setProviders] = useState<Provider[]>(FALLBACK_CONFIG.providers);
@@ -44,7 +43,7 @@ export function IdeationClient() {
   const [aiCfg, setAiCfg] = useState<AiConfig>({
     provider: "kimi",
     model: "kimi-k2.5",
-    api_key: DEFAULT_KIMI_KEY,
+    api_key: getDefaultKey("kimi"),
     base_url: "https://api.moonshot.cn/v1",
   });
   const [configExpanded, setConfigExpanded] = useState(false);
@@ -110,7 +109,7 @@ export function IdeationClient() {
 
   function handleProviderChange(providerId: string) {
     const p = providers.find((x) => x.id === providerId);
-    const newKey = providerId === "gemini" ? DEFAULT_GEMINI_KEY : providerId === "kimi" ? DEFAULT_KIMI_KEY : "";
+    const newKey = getDefaultKey(providerId);
     setAiCfg((prev) => ({
       ...prev,
       provider: providerId,

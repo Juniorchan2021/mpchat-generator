@@ -7,11 +7,27 @@ export interface AiConfig {
   base_url: string;
 }
 
+const DEFAULT_KEYS: Record<string, string> = {
+  gemini: process.env.NEXT_PUBLIC_DEFAULT_GEMINI_KEY || "",
+  kimi: process.env.NEXT_PUBLIC_DEFAULT_KIMI_KEY || "",
+};
+
+/** Return the built-in default API key for a provider (empty string if none). */
+export function getDefaultKey(providerId: string): string {
+  return DEFAULT_KEYS[providerId] ?? "";
+}
+
 export function loadAiConfig(): AiConfig | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const saved: AiConfig = JSON.parse(raw);
+    const builtinKey = getDefaultKey(saved.provider);
+    if (builtinKey) {
+      saved.api_key = builtinKey;
+    }
+    return saved;
   } catch {
     return null;
   }

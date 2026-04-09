@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { loadAiConfig, saveAiConfig, type AiConfig } from "@/lib/aiConfig";
+import { loadAiConfig, saveAiConfig, getDefaultKey, type AiConfig } from "@/lib/aiConfig";
 import { FALLBACK_CONFIG } from "@/lib/fallbackConfig";
 import type { IntercomCollection, Provider, QAPair } from "@/lib/types";
 
@@ -30,14 +30,11 @@ function getCollectionName(col: IntercomCollection, lang: string): string {
 
 export function IntercomQAClient() {
   const { t } = useI18n();
-  const DEFAULT_GEMINI_KEY = process.env.NEXT_PUBLIC_DEFAULT_GEMINI_KEY || "";
-  const DEFAULT_KIMI_KEY = process.env.NEXT_PUBLIC_DEFAULT_KIMI_KEY || "";
-
   const [providers, setProviders] = useState<Provider[]>(FALLBACK_CONFIG.providers);
   const [aiCfg, setAiCfg] = useState<AiConfig>({
     provider: "kimi",
     model: "kimi-k2.5",
-    api_key: DEFAULT_KIMI_KEY,
+    api_key: getDefaultKey("kimi"),
     base_url: "https://api.moonshot.cn/v1",
   });
   const [configExpanded, setConfigExpanded] = useState(false);
@@ -128,7 +125,7 @@ export function IntercomQAClient() {
 
   function handleProviderChange(providerId: string) {
     const p = providers.find((x) => x.id === providerId);
-    const newKey = providerId === "gemini" ? DEFAULT_GEMINI_KEY : providerId === "kimi" ? DEFAULT_KIMI_KEY : "";
+    const newKey = getDefaultKey(providerId);
     setAiCfg((prev) => ({
       ...prev,
       provider: providerId,

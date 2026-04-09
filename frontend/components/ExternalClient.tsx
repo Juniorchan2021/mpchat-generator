@@ -6,7 +6,7 @@ import remarkGfm from "remark-gfm";
 
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { loadAiConfig, saveAiConfig, type AiConfig } from "@/lib/aiConfig";
+import { loadAiConfig, saveAiConfig, getDefaultKey, type AiConfig } from "@/lib/aiConfig";
 import { FALLBACK_CONFIG } from "@/lib/fallbackConfig";
 import { detectSourceLang, getTranslateTargets } from "@/lib/translateUtils";
 import type { Provider, PublishResponse } from "@/lib/types";
@@ -93,15 +93,13 @@ function countKeywordOccurrences(text: string, keywords: string): Record<string,
 
 export function ExternalClient() {
   const { t } = useI18n();
-  const DEFAULT_GEMINI_KEY = process.env.NEXT_PUBLIC_DEFAULT_GEMINI_KEY || "";
-  const DEFAULT_KIMI_KEY = process.env.NEXT_PUBLIC_DEFAULT_KIMI_KEY || "";
   const [article, setArticle] = useState("");
   const [keywords, setKeywords] = useState("");
   const [providers, setProviders] = useState<Provider[]>(FALLBACK_CONFIG.providers);
   const [aiCfg, setAiCfg] = useState<AiConfig>({
     provider: "kimi",
     model: "kimi-k2.5",
-    api_key: DEFAULT_KIMI_KEY,
+    api_key: getDefaultKey("kimi"),
     base_url: "https://api.moonshot.cn/v1",
   });
   const [configExpanded, setConfigExpanded] = useState(false);
@@ -466,7 +464,7 @@ export function ExternalClient() {
               <select value={aiCfg.provider} onChange={(e) => {
                   const id = e.target.value;
                   const p = providers.find((x) => x.id === id);
-                  const newKey = id === "gemini" ? DEFAULT_GEMINI_KEY : id === "kimi" ? DEFAULT_KIMI_KEY : "";
+                  const newKey = getDefaultKey(id);
                   const newCfg = { provider: id, model: p?.models?.[0] || "", base_url: p?.base_url || "", api_key: newKey };
                   setAiCfg(newCfg);
                   saveAiConfig(newCfg);
