@@ -9,7 +9,6 @@ export interface AiConfig {
 
 const DEFAULT_KEYS: Record<string, string> = {
   gemini: process.env.NEXT_PUBLIC_DEFAULT_GEMINI_KEY || "",
-  kimi: process.env.NEXT_PUBLIC_DEFAULT_KIMI_KEY || "",
 };
 
 /** Return the built-in default API key for a provider (empty string if none). */

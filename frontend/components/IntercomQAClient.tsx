@@ -32,10 +32,10 @@ export function IntercomQAClient() {
   const { t } = useI18n();
   const [providers, setProviders] = useState<Provider[]>(FALLBACK_CONFIG.providers);
   const [aiCfg, setAiCfg] = useState<AiConfig>({
-    provider: "kimi",
-    model: "kimi-k2.5",
-    api_key: getDefaultKey("kimi"),
-    base_url: "https://api.moonshot.cn/v1",
+    provider: "gemini",
+    model: "gemini-2.5-flash",
+    api_key: getDefaultKey("gemini"),
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/",
   });
   const [configExpanded, setConfigExpanded] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
