@@ -37,11 +37,11 @@ export const FALLBACK_CONFIG: ConfigData = {
     },
     {
       id: "kimi",
-      label: "Kimi",
+      label: "Kimi (Moonshot)",
       base_url: "https://api.moonshot.cn/v1",
-      models: ["moonshot-v1-128k", "moonshot-v1-32k", "moonshot-v1-8k", "moonshot-v1-auto"],
-      key_prefix: "sk-...",
-      get_key_url: "https://platform.moonshot.cn/console/api-keys",
+      models: ["kimi-k2.5", "moonshot-v1-128k", "moonshot-v1-auto", "moonshot-v1-32k", "moonshot-v1-8k"],
+      key_prefix: "sk-kimi-...",
+      get_key_url: "https://platform.kimi.com/console/api-keys",
     },
     {
       id: "groq",

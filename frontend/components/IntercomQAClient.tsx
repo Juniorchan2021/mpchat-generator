@@ -31,13 +31,14 @@ function getCollectionName(col: IntercomCollection, lang: string): string {
 export function IntercomQAClient() {
   const { t } = useI18n();
   const DEFAULT_GEMINI_KEY = process.env.NEXT_PUBLIC_DEFAULT_GEMINI_KEY || "";
+  const DEFAULT_KIMI_KEY = process.env.NEXT_PUBLIC_DEFAULT_KIMI_KEY || "";
 
   const [providers, setProviders] = useState<Provider[]>(FALLBACK_CONFIG.providers);
   const [aiCfg, setAiCfg] = useState<AiConfig>({
-    provider: "gemini",
-    model: "gemini-2.5-flash",
-    api_key: DEFAULT_GEMINI_KEY,
-    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    provider: "kimi",
+    model: "kimi-k2.5",
+    api_key: DEFAULT_KIMI_KEY,
+    base_url: "https://api.moonshot.cn/v1",
   });
   const [configExpanded, setConfigExpanded] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -127,7 +128,7 @@ export function IntercomQAClient() {
 
   function handleProviderChange(providerId: string) {
     const p = providers.find((x) => x.id === providerId);
-    const newKey = providerId === "gemini" ? DEFAULT_GEMINI_KEY : "";
+    const newKey = providerId === "gemini" ? DEFAULT_GEMINI_KEY : providerId === "kimi" ? DEFAULT_KIMI_KEY : "";
     setAiCfg((prev) => ({
       ...prev,
       provider: providerId,

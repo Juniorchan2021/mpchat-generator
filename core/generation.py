@@ -52,11 +52,14 @@ def call_llm(
         return resp.content[0].text
     else:
         client = get_client(api_key, base_url)
+        _temp = temperature
+        if model.startswith("kimi-k2"):
+            _temp = 0.6
         kwargs = {
             "model": model,
             "messages": messages,
             "max_tokens": max_tokens,
-            "temperature": temperature,
+            "temperature": _temp,
         }
         if response_format:
             kwargs["response_format"] = response_format
@@ -66,6 +69,9 @@ def call_llm(
             err_msg = str(e).lower()
             if "response_format" in err_msg or "json_object" in err_msg or "unsupported" in err_msg:
                 kwargs.pop("response_format", None)
+                resp = client.chat.completions.create(**kwargs)
+            elif "temperature" in err_msg:
+                kwargs.pop("temperature", None)
                 resp = client.chat.completions.create(**kwargs)
             else:
                 raise

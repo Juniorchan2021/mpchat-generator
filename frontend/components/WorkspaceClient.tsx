@@ -27,12 +27,13 @@ import type {
 type ResultTab = "article" | "seo-geo" | "export" | "publish" | "ai-detect";
 
 const DEFAULT_GEMINI_KEY = process.env.NEXT_PUBLIC_DEFAULT_GEMINI_KEY || "";
+const DEFAULT_KIMI_KEY = process.env.NEXT_PUBLIC_DEFAULT_KIMI_KEY || "";
 
 const EMPTY_FORM: GenerateRequest = {
-  provider: "gemini",
-  model: "gemini-2.5-flash",
-  api_key: DEFAULT_GEMINI_KEY,
-  base_url: "https://generativelanguage.googleapis.com/v1beta/openai/",
+  provider: "kimi",
+  model: "kimi-k2.5",
+  api_key: DEFAULT_KIMI_KEY,
+  base_url: "https://api.moonshot.cn/v1",
   language: "",
   category: "",
   scenario: "",
@@ -273,7 +274,7 @@ export function WorkspaceClient() {
   }
   function handleProviderChange(providerId: string) {
     const next = config?.providers?.find((p) => p.id === providerId);
-    const newKey = providerId === "gemini" ? DEFAULT_GEMINI_KEY : "";
+    const newKey = providerId === "gemini" ? DEFAULT_GEMINI_KEY : providerId === "kimi" ? DEFAULT_KIMI_KEY : "";
     setForm((prev) => ({ ...prev, provider: providerId, model: next?.models?.[0] || prev.model, base_url: next?.base_url || prev.base_url, api_key: newKey }));
   }
   function toggleSellingPoint(point: string) {

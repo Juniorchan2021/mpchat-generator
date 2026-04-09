@@ -124,6 +124,7 @@
   "ideation.difficulty.medium": "Medium",
   "ideation.difficulty.hard": "Hard",
   "err.ideation.noKeyword": "Please enter a core keyword",
+  "err.llmRegionNotSupported": "The model provider blocked this request due to region or access policy (often Google Gemini). This is not an MPChat bug—try another provider or model in AI settings, or check the provider docs. Note: requests are sent from the backend, so changing only your browser network usually does not help.",
   "msg.ideation.noTopics": "No topics generated, try a different keyword",
   "ideation.titleLanguage": "Title Language",
   "ideation.cachedFor": "Cached for",

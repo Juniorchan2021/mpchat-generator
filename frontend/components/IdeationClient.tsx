@@ -9,6 +9,7 @@ import { loadAiConfig, saveAiConfig, type AiConfig } from "@/lib/aiConfig";
 import { FALLBACK_CONFIG } from "@/lib/fallbackConfig";
 import type { Provider, TopicSuggestion } from "@/lib/types";
 
+const LLM_REGION_ERR_KEY = "err.llmRegionNotSupported";
 const IDEATION_PREFILL_KEY = "mpchat-ideation-prefill";
 const IDEATION_TOPICS_CACHE_KEY = "mpchat-ideation-topics";
 
@@ -35,15 +36,16 @@ export function IdeationClient() {
   const { t } = useI18n();
   const router = useRouter();
   const DEFAULT_GEMINI_KEY = process.env.NEXT_PUBLIC_DEFAULT_GEMINI_KEY || "";
+  const DEFAULT_KIMI_KEY = process.env.NEXT_PUBLIC_DEFAULT_KIMI_KEY || "";
 
   // 从后端 config 加载 providers（与工作台同源）
   const [providers, setProviders] = useState<Provider[]>(FALLBACK_CONFIG.providers);
 
   const [aiCfg, setAiCfg] = useState<AiConfig>({
-    provider: "gemini",
-    model: "gemini-2.5-flash",
-    api_key: DEFAULT_GEMINI_KEY,
-    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    provider: "kimi",
+    model: "kimi-k2.5",
+    api_key: DEFAULT_KIMI_KEY,
+    base_url: "https://api.moonshot.cn/v1",
   });
   const [configExpanded, setConfigExpanded] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -108,7 +110,7 @@ export function IdeationClient() {
 
   function handleProviderChange(providerId: string) {
     const p = providers.find((x) => x.id === providerId);
-    const newKey = providerId === "gemini" ? DEFAULT_GEMINI_KEY : "";
+    const newKey = providerId === "gemini" ? DEFAULT_GEMINI_KEY : providerId === "kimi" ? DEFAULT_KIMI_KEY : "";
     setAiCfg((prev) => ({
       ...prev,
       provider: providerId,
@@ -147,7 +149,8 @@ export function IdeationClient() {
         setError(t("msg.ideation.noTopics"));
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("err.requestFailed"));
+      const raw = e instanceof Error ? e.message : t("err.requestFailed");
+      setError(raw === LLM_REGION_ERR_KEY ? t(LLM_REGION_ERR_KEY) : raw);
     } finally {
       clearTimeout(warmupTimer);
       setShowWarmup(false);

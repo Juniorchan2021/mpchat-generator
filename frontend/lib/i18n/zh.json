@@ -124,6 +124,7 @@
   "ideation.difficulty.medium": "中等",
   "ideation.difficulty.hard": "困难",
   "err.ideation.noKeyword": "请输入核心关键词",
+  "err.llmRegionNotSupported": "模型服务商因地区或访问策略拒绝了请求（常见于 Google Gemini），并非本应用故障。请在「AI 配置」中更换其他可用的服务商或模型，或查阅其官方文档。说明：请求由后端服务器发出，仅切换浏览器网络通常无效。",
   "msg.ideation.noTopics": "未生成任何选题，请尝试更换关键词",
   "ideation.titleLanguage": "标题语言",
   "ideation.cachedFor": "缓存自",

@@ -4,6 +4,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.deps import verify_api_key
+from api.llm_errors import format_llm_error_detail
 from api.models.requests import IdeationRequest
 from api.models.responses import IdeationResponse, TopicSuggestion
 from core.ideation import generate_topics
@@ -32,7 +33,7 @@ async def get_ideation_topics(req: IdeationRequest):
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.error("选题生成失败: %s", e)
-        raise HTTPException(status_code=502, detail=f"LLM 调用失败: {e}")
+        raise HTTPException(status_code=502, detail=format_llm_error_detail(e))
 
     topics = [TopicSuggestion(**t) for t in topics_raw]
     return IdeationResponse(
