@@ -37,6 +37,7 @@ jobs:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
           NEXT_PUBLIC_API_KEY: ${{ secrets.NEXT_PUBLIC_API_KEY }}
           NEXT_PUBLIC_DEFAULT_GEMINI_KEY: ${{ secrets.NEXT_PUBLIC_DEFAULT_GEMINI_KEY }}
+          NEXT_PUBLIC_DEFAULT_KIMI_KEY: ${{ secrets.NEXT_PUBLIC_DEFAULT_KIMI_KEY }}
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/pages-action@v1
