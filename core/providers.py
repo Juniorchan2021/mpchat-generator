@@ -53,13 +53,14 @@ PROVIDERS = {
         "label": "Kimi",
         "base_url": "https://api.moonshot.cn/v1",
         "models": [
+            "kimi-k2.5",
+            "kimi-k2-thinking",
+            "kimi-k2-turbo-preview",
             "moonshot-v1-128k",
-            "moonshot-v1-32k",
-            "moonshot-v1-8k",
             "moonshot-v1-auto",
         ],
-        "key_prefix": "sk-...",
-        "get_key_url": "https://platform.moonshot.cn/console/api-keys",
+        "key_prefix": "sk-kimi-...",
+        "get_key_url": "https://platform.kimi.com/console/api-keys",
     },
     "groq": {
         "label": "Groq",
