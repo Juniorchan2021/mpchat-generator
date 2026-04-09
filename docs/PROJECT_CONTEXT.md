@@ -1,6 +1,6 @@
 # MPChat 软文机器人 — 项目架构总结
 
-> 最后更新：2026-03-18 | v5.7 — 安全审计修复：API 认证全量挂载 + 错误处理补全 + 类型一致性 + 图片 Key 环境变量化
+> 最后更新：2026-03-18 | v5.8 — 部署上线修复：CI/CD 工作流 + API 认证默认关闭 + 图片兜底源替换 + 部署地址固化
 
 ---
 
@@ -43,15 +43,16 @@ MPChat 软文机器人是一个面向 MPChat 运营团队的 **AI 驱动长文�
 | Pydantic | v2 | 请求/响应模型校验 |
 | requests + BeautifulSoup4 | latest | 网页抓取（SERP、知识库） |
 
-**部署**：独立服务器（uvicorn）
+**部署**：Render.com（`https://mpchat-api.onrender.com`，从 GitHub 自动部署）
 
 ### 外部服务
 
 | 服务 | 用途 |
 |------|------|
 | Google Gemini API | 默认 LLM（gemini-2.5-flash） |
-| Pixabay API | 主图片源 |
-| Pexels API | 补充图片源 |
+| Pixabay API | 主图片源（Tier 1） |
+| Pexels API | 补充图片源（Tier 2） |
+| LoremFlickr | 兜底图片源（Tier 3，Pixabay/Pexels 均失败时） |
 | Dev.to API | 文章直发 |
 | Hashnode GraphQL API | 文章直发 |
 | Medium API | 文章直发（需 Integration Token，无 Token 降级为格式预览） |
@@ -101,7 +102,7 @@ MPChat-软文机器人/
 ├── api/                               # ===== FastAPI 后端 =====
 │   ├── main.py                        #   应用入口 + CORS + 路由注册
 │   ├── services.py                    #   优化 + AI 检测业务逻辑
-│   ├── deps.py                        #   依赖注入 (API Key 校验)
+│   ├── deps.py                        #   依赖注入 (API Key 校验，需 MPCHAT_AUTH_ENABLED=true 显式启用)
 │   ├── utils.py                       #   场景/文风/卖点工具函数
 │   ├── models/
 │   │   ├── requests.py                #   12 个 Pydantic 请求模型（含 TranslateRequest）；PublishRequest 含 medium_token + paragraph_key ← Phase 2
@@ -134,7 +135,7 @@ MPChat-软文机器人/
 │
 ├── seo_tools.py                       # SEO 工具箱：slug / JSON-LD / 内部链接 / 阅读统计
 ├── geo_tools.py                       # GEO 工具箱：评分 / FAQ Schema / 优化 Prompt
-├── image_client.py                    # 多源图片客户端 (Pixabay/Pexels/Placewise)
+├── image_client.py                    # 多源图片客户端 (Pixabay/Pexels/LoremFlickr)
 ├── publishers.py                      # 多平台发布 + 格式化；新增 publish_to_paragraph() + publish_to_medium() ← Phase 2
 ├── scenarios.py                       # 60+ 场景 / 25+ 卖点 / 7 文风 / 16 语言
 ├── serp_analyzer.py                   # Google SERP 分析
@@ -150,7 +151,9 @@ MPChat-软文机器人/
 │   ├── test_translate_models.py       #   Pydantic 模型测试 (14 个)
 │   └── test_translate_router.py       #   FastAPI 路由集成测试 (13 个)
 │
-├── .cursorrules                       # Cursor 编码规范
+├── .github/workflows/deploy.yml       # CI/CD: push main → Cloudflare Pages + Render 自动部署
+├── .cursorrules                       # Cursor 编码规范 + 部署地址核心规则
+├── render.yaml                        # Render.com 后端部署配置
 └── docs/
     ├── PRD.md                         # 产品需求文档
     ├── SPEC.md                        # 规格与规范文档
@@ -382,7 +385,7 @@ GenerateResponse → 前端渲染 (文章/SEO-GEO/导出/发布/AI检测 5 个 T
 | `OPENAI_API_KEY` | 是 | 默认 LLM API Key（目前使用 Gemini） |
 | `OPENAI_BASE_URL` | 是 | LLM API Base URL |
 | `OPENAI_MODEL` | 否 | 默认模型名 |
-| `PIXABAY_API_KEY` | 否 | Pixabay 图片搜索（本地写 .env，生产通过 GitHub Actions CI/CD 自动注入服务器） |
+| `PIXABAY_API_KEY` | 否 | Pixabay 图片搜索（代码有默认值兜底，可通过环境变量覆盖） |
 | `PEXELS_API_KEY` | 否 | Pexels 图片搜索（同上） |
 | `DEVTO_API_KEY` | 否 | Dev.to 发布 |
 | `HASHNODE_TOKEN` | 否 | Hashnode 发布 |
@@ -390,7 +393,8 @@ GenerateResponse → 前端渲染 (文章/SEO-GEO/导出/发布/AI检测 5 个 T
 | `MEDIUM_TOKEN` | 否 | Medium 发布（有则 API 直发，无则格式预览） |
 | `PARAGRAPH_API_KEY` | 否 | Paragraph.xyz 发布 |
 | `INTERCOM_TOKEN` | 否 | Intercom 帮助中心上传 |
-| `MPCHAT_API_KEY` | 否 | API 接口保护（全部 10 个路由已挂载 `verify_api_key`） |
+| `MPCHAT_API_KEY` | 否 | API 接口保护（全部 10 个路由已挂载 `verify_api_key`），需同时设置 `MPCHAT_AUTH_ENABLED=true` 才启用 |
+| `MPCHAT_AUTH_ENABLED` | 否 | 设为 `true` 时启用 API Key 认证（默认关闭） |
 | `CORS_ALLOW_ORIGINS` | 否 | 跨域允许来源（逗号分隔） |
 | `LOG_LEVEL` | 否 | 后端日志级别（默认 INFO） |
 | `NEXT_PUBLIC_API_URL` | 是 | 前端连接后端的 URL |
@@ -436,3 +440,15 @@ GenerateResponse → 前端渲染 (文章/SEO-GEO/导出/发布/AI检测 5 个 T
 | `Provider.sdk` 字段前后端不同步 | 后端 `ProviderResponse` 新增 `sdk: str \| None = None` | `api/models/responses.py` |
 | `PublishResponse.error` 前端未声明 | 前端 `PublishResponse` 接口新增 `error?: string` | `frontend/lib/types.ts` |
 | `render.yaml` 未声明图片 Key 变量 | 新增 `sync: false` 声明 | `render.yaml` |
+
+## 12. 部署上线修复记录（v5.8）
+
+> 执行时间：2026-03-18
+
+| 问题 | 修复方式 | 涉及文件 |
+|------|----------|----------|
+| API 认证在 Render 上默认启用但前端未配置 Key，导致全部 401 | 认证改为需要 `MPCHAT_AUTH_ENABLED=true` 显式启用，默认关闭 | `api/deps.py` |
+| `NEXT_PUBLIC_API_URL` 指向 localhost，前端无法连接后端 | 更正 GitHub Secret 为 `https://mpchat-api.onrender.com`；部署地址写入 `.cursorrules` 防止再犯 | GitHub Secrets, `.cursorrules` |
+| 图片兜底源 Placewise CDN 已失效（404） | 替换为 LoremFlickr；添加 logging 便于排查 | `image_client.py` |
+| Pixabay/Pexels Key 未注入 Render 环境变量，图片全走兜底 | `os.getenv()` 添加默认值作为 fallback | `api/routers/generate.py` |
+| 缺少 CI/CD 自动部署 | 新增 GitHub Actions 工作流：push main → Cloudflare Pages + SSH 后端部署 | `.github/workflows/deploy.yml` |

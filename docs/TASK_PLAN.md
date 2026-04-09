@@ -321,3 +321,17 @@
 | 选题页/外部文章页的 AI 服务商模型列表硬编码在前端，新版本模型（如 Gemini 3.x、Claude 5.x）发布后用户无法选择，且不同页面维护多份重复的 PROVIDER_DEFAULTS | 选题页和外部文章页在开发时各自独立维护了前端常量，与工作台的后端驱动模式不一致 | 删除两个页面的硬编码 `PROVIDER_DEFAULTS`，改为调用 `api.getConfig()` 读取与工作台同源的后端数据；`custom` 服务商（models 为空）自动降级为文本输入框，用户可输入任意模型名；`FALLBACK_CONFIG` 同步更新为离线兜底 | ✅ 已修复 |
 | 各服务商在 `core/providers.py` 和 `fallbackConfig.ts` 中的模型列表已过时（如 Gemini 缺少 2.5-pro，OpenAI 缺少 gpt-4.1/o3，Claude 缺少最新命名） | 模型列表在 Phase 1 开发时手动填写，之后未跟进各厂商的模型迭代 | 更新 `core/providers.py` 和 `fallbackConfig.ts`，补全截至 2026-03 的各服务商主力最新模型（Gemini 2.5-pro/flash、GPT-4.1/o3/o4-mini、Claude opus-4-5/sonnet-4-5、Qwen3 等） | ✅ 已修复 |
 | 从选题页点击「使用此标题」跳转工作台后，点击主配置区「生成文章」按钮生成的是按场景配置的文章，而非基于所选标题的文章；两个生成入口（主按钮 + banner 立即生成）功能不同但视觉上无区分，造成误触 | banner「立即生成」调用 `handleGenerate()` 前会 `setIdeationTargetTitle("")` 清空标题，导致 `target_title` 未传入 LLM；主配置区按钮也调用同一个无参数函数，二者无差异 | 1. `GenerateRequest` 新增 `target_title?: string` 字段；2. `build_user_prompt()` 注入"目标标题（必须严格以此标题为 H1）"指令；3. banner「立即生成」将 `ideationTargetTitle` 作为参数传入 `handleGenerate(title)`，生成完成后自动清空；4. 主配置区按钮在有选题 banner 时显示"按场景生成（忽略选题）"并降低透明度，明确区分两个入口 | ✅ 已修复 |
+
+---
+
+## 部署上线问题修复记录
+
+| 问题描述 | 原因 | 修复方案 | 状态 |
+|---------|------|---------|------|
+| GitHub Actions 推送失败：`refusing to allow an OAuth App to create or update workflow` | GitHub OAuth Token 缺少 `workflow` scope，无法推送 `.github/workflows/` 文件 | 执行 `gh auth refresh -s workflow` 刷新 Token 权限 | ✅ 已修复 |
+| Cloudflare Pages 部署失败：`Input required and not supplied: apiToken` | GitHub Secrets 中缺少 `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`、`CF_PAGES_PROJECT_NAME` | 通过 `gh secret set` 添加三个 Cloudflare 相关 Secret | ✅ 已修复 |
+| Cloudflare Pages 部署失败：`Resource not accessible by integration` | `GITHUB_TOKEN` 缺少 `deployments: write` 权限 | `deploy.yml` 的 `deploy-frontend` job 添加 `permissions: { contents: read, deployments: write }` | ✅ 已修复 |
+| 前端显示「使用离线配置」+「Invalid API key」，所有后端接口返回 401 | Render 上设置了 `MPCHAT_API_KEY` 环境变量，但前端构建时 `NEXT_PUBLIC_API_KEY` 未配置，请求无 `X-API-Key` header | `api/deps.py` 将认证改为显式启用：仅当 `MPCHAT_AUTH_ENABLED=true` 且 `MPCHAT_API_KEY` 非空时才校验，默认关闭 | ✅ 已修复 |
+| 前端连接 `localhost:8000`，无法访问线上后端 | GitHub Secret `NEXT_PUBLIC_API_URL` 被错误设置为 `http://localhost:8000` | 更正为 `https://mpchat-api.onrender.com`，并在 `.cursorrules` 中记录正确部署地址防止再犯 | ✅ 已修复 |
+| 图片显示 alt 文字而非实际图片，Placewise CDN 返回 404 | 图片兜底源 `img.placewise.io` 已失效 | `image_client.py` 将 Placewise CDN 替换为 LoremFlickr，并为 `search_pixabay`/`search_pexels` 添加 `logging.warning` | ✅ 已修复 |
+| 文章图片全部来自低质量兜底源，未使用 Pixabay/Pexels | Render 上未设置 `PIXABAY_API_KEY`/`PEXELS_API_KEY`，且 Dashboard 找不到 `mpchat-api` 服务无法手动添加 | `api/routers/generate.py` 为 `os.getenv()` 添加默认值，Render 自动重新部署后生效 | ✅ 已修复 |
